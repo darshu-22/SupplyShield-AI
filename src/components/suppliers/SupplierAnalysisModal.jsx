@@ -7,10 +7,12 @@ import {
   CheckCircle2, 
   Info, 
   DollarSign, 
-  SendHorizontal 
+  SendHorizontal,
+  Sliders,
+  ShieldAlert
 } from 'lucide-react';
 
-export function SupplierAnalysisModal({ supplier, onClose, onQueueDecision }) {
+export function SupplierAnalysisModal({ supplier, onClose, onQueueDecision, onOpenSimulator }) {
   const [stagedActionId, setStagedActionId] = useState(null);
   const [isSent, setIsSent] = useState(false);
   const counterRef = useRef(500);
@@ -18,6 +20,7 @@ export function SupplierAnalysisModal({ supplier, onClose, onQueueDecision }) {
   if (!supplier) return null;
 
   const summary = supplier.preliminarySummary;
+  const crossWarnings = supplier.crossSignalWarnings || [];
 
   const handleStageAction = (action) => {
     setStagedActionId(action.id);
@@ -30,9 +33,9 @@ export function SupplierAnalysisModal({ supplier, onClose, onQueueDecision }) {
         supplierName: supplier.shortName,
         actionTitle: action.title,
         category: action.type,
-        urgency: supplier.riskLevel === 'HIGH' ? 'HIGH' : 'MEDIUM',
+        urgency: supplier.riskLevel === 'HIGH' || supplier.riskLevel === 'CRITICAL' ? 'HIGH' : 'MEDIUM',
         financialValue: supplier.quarterlyOverpaymentExposure > 0 ? `$${(supplier.quarterlyOverpaymentExposure).toLocaleString()} / qtr` : 'Operational Risk Mitigation',
-        evidenceSummary: `${action.description} Triggered by ${supplier.code} metrics.`,
+        evidenceSummary: `${action.description} Triggered by ${supplier.code} audited metrics.`,
         draftDetails: `Action drafted during preliminary diagnostic: ${action.description}`,
         status: 'Pending Approval',
         approvedAt: null,
@@ -47,7 +50,7 @@ export function SupplierAnalysisModal({ supplier, onClose, onQueueDecision }) {
       <div 
         className="modal-content" 
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '880px' }}
+        style={{ maxWidth: '880px', maxHeight: '92vh' }}
       >
         {/* Modal Header */}
         <div className="modal-header">
@@ -87,7 +90,7 @@ export function SupplierAnalysisModal({ supplier, onClose, onQueueDecision }) {
 
         {/* Modal Body */}
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {/* Phase 1 Explicit Prototype Notice Banner */}
+          {/* Phase 2 Explicit Prototype Notice Banner */}
           <div style={{
             padding: '12px 16px',
             borderRadius: 'var(--radius-sm)',
@@ -100,13 +103,48 @@ export function SupplierAnalysisModal({ supplier, onClose, onQueueDecision }) {
             <Info size={18} style={{ color: 'var(--teal-primary)', marginTop: '2px', flexShrink: 0 }} />
             <div>
               <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--teal-primary)', marginBottom: '2px' }}>
-                Simulated Intelligence Review — Rules-Based Diagnostic
+                Simulated Intelligence Review — Rules-Based Diagnostic (Phase 2)
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                Demonstration mode: Preliminary rule-based diagnostic using local demonstration metrics. Full autonomous agentic synthesis and multi-agent negotiation models will be integrated in Phase 2.
+                Demonstration mode: Preliminary rule-based diagnostic derived from audited local demonstration transactions. Full autonomous agentic negotiation models will be integrated in future phases.
               </p>
             </div>
           </div>
+
+          {/* Cross-Signal Connected Warnings */}
+          {crossWarnings.length > 0 && (
+            <div>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <ShieldAlert size={16} style={{ color: 'var(--risk-high-solid)' }} />
+                Cross-Signal Intelligence Correlations ({crossWarnings.length})
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {crossWarnings.map(cw => (
+                  <div key={cw.id} style={{
+                    padding: '12px 16px',
+                    borderRadius: 'var(--radius-sm)',
+                    backgroundColor: 'var(--risk-high-bg)',
+                    border: '1px solid var(--risk-high-border)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--risk-high-text)' }}>
+                        {cw.title}
+                      </span>
+                      <span className="badge badge-high" style={{ fontSize: '0.68rem' }}>
+                        {cw.severity}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: '6px' }}>
+                      {cw.whyItMatters}
+                    </p>
+                    <div style={{ fontSize: '0.74rem', color: '#7dd3fc', borderTop: '1px solid rgba(244, 63, 94, 0.2)', paddingTop: '6px' }}>
+                      <strong>Suggested Action:</strong> {cw.recommendedInvestigation}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Diagnostic Core Cards */}
           <div style={{
@@ -271,12 +309,25 @@ export function SupplierAnalysisModal({ supplier, onClose, onQueueDecision }) {
 
         {/* Modal Footer */}
         <div className="modal-footer">
+          {onOpenSimulator && (
+            <button 
+              onClick={() => {
+                onClose();
+                onOpenSimulator(supplier);
+              }}
+              className="btn btn-secondary"
+            >
+              <Sliders size={14} style={{ color: 'var(--teal-primary)' }} />
+              Simulate What-If Scenario
+            </button>
+          )}
+
           {isSent && (
             <span style={{ fontSize: '0.78rem', color: '#86efac', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <CheckCircle2 size={14} /> Action draft queued to Decisions Console
             </span>
           )}
-          <button onClick={onClose} className="btn btn-secondary">
+          <button onClick={onClose} className="btn btn-primary">
             Done
           </button>
         </div>

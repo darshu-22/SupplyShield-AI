@@ -2,21 +2,22 @@ import React from 'react';
 import { 
   Building2, 
   AlertTriangle, 
-  CheckSquare, 
+  PackageX, 
   DollarSign, 
-  ArrowUpRight
+  ArrowUpRight 
 } from 'lucide-react';
 
 export function SummaryCards({ 
   suppliers = [], 
-  pendingActionsCount = 4,
   onSelectRiskFilter,
   onNavigateTab 
 }) {
   const totalSuppliers = suppliers.length;
-  const highRiskSuppliers = suppliers.filter(s => s.riskLevel === 'HIGH');
+  const highRiskSuppliers = suppliers.filter(s => s.riskLevel === 'HIGH' || s.riskLevel === 'CRITICAL');
+  const soleSourceSuppliers = suppliers.filter(s => s.isSingleSource);
+  const leadTimeDeficitSuppliers = suppliers.filter(s => (s.leadTimeCoverageGapDays || 0) < 0);
   
-  // Calculate total quarterly overpayment exposure across suppliers with positive price variances
+  // Calculated quarterly overpayment exposure across actual purchase orders
   const totalQuarterlyOverpayment = suppliers.reduce((acc, curr) => {
     return acc + (curr.quarterlyOverpaymentExposure || 0);
   }, 0);
@@ -32,19 +33,19 @@ export function SummaryCards({
       id: 'total-suppliers',
       title: 'Monitored Suppliers',
       value: totalSuppliers,
-      subtitle: `${suppliers.filter(s => s.isSingleSource).length} single-source sole providers`,
+      subtitle: `${soleSourceSuppliers.length} single-source sole provider (Apex)`,
       icon: Building2,
       accentColor: 'var(--teal-primary)',
       bgTint: 'rgba(14, 165, 233, 0.08)',
       borderColor: 'var(--border-subtle)',
-      actionText: 'View All Suppliers',
+      actionText: 'Supplier Directory',
       onClick: () => onNavigateTab && onNavigateTab('suppliers')
     },
     {
       id: 'high-risk',
-      title: 'High-Risk Suppliers',
+      title: 'High / Critical Risk',
       value: highRiskSuppliers.length,
-      subtitle: 'Critical quality, cert, or delivery breaches',
+      subtitle: 'Calculated score ≥ 60/100',
       icon: AlertTriangle,
       accentColor: 'var(--risk-high-solid)',
       bgTint: 'var(--risk-high-bg)',
@@ -55,30 +56,30 @@ export function SummaryCards({
       onClick: () => onSelectRiskFilter && onSelectRiskFilter('HIGH')
     },
     {
-      id: 'pending-actions',
-      title: 'Pending Decisions',
-      value: pendingActionsCount,
-      subtitle: 'Awaiting human procurement sign-off',
-      icon: CheckSquare,
+      id: 'lead-time-deficit',
+      title: 'Lead-Time Deficit Gap',
+      value: `${leadTimeDeficitSuppliers.length} Suppliers`,
+      subtitle: 'Stockout risk before replenishment arrives',
+      icon: PackageX,
       accentColor: 'var(--risk-med-solid)',
       bgTint: 'var(--risk-med-bg)',
       borderColor: 'var(--risk-med-border)',
-      actionText: 'Open Action Center',
-      badge: 'In Review Queue',
+      actionText: 'Inspect Buffers',
+      badge: 'Buffer Deficit',
       badgeClass: 'badge-med',
-      onClick: () => onNavigateTab && onNavigateTab('decisions')
+      onClick: () => onNavigateTab && onNavigateTab('risk')
     },
     {
       id: 'price-overpayment',
-      title: 'Potential Price Overpayment',
+      title: 'Audited Price Overpayment',
       value: formattedOverpayment,
-      subtitle: 'Quarterly unratified contract price variances',
+      subtitle: 'Reconciled from active PO invoice lines',
       icon: DollarSign,
       accentColor: '#38bdf8',
       bgTint: 'rgba(56, 189, 248, 0.08)',
       borderColor: 'rgba(56, 189, 248, 0.25)',
       actionText: 'Audit Variances',
-      badge: 'Active Leakage',
+      badge: 'Verified Leakage',
       badgeClass: 'badge-high',
       isCurrency: true,
       onClick: () => onNavigateTab && onNavigateTab('risk')

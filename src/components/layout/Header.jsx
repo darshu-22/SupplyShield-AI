@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Menu, 
   RotateCw, 
   AlertTriangle, 
   Sparkles, 
-  Search 
+  Search,
+  BookOpen
 } from 'lucide-react';
+import { NotificationDropdown } from './NotificationDropdown';
 
 export function Header({ 
   activeTab, 
@@ -15,20 +17,37 @@ export function Header({
   hasError, 
   onToggleError,
   searchQuery,
-  setSearchQuery 
+  setSearchQuery,
+  onOpenMethodology,
+  suppliers = [],
+  onInspectSupplier
 }) {
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  // Extract all cross-signal critical and high warnings across suppliers
+  const criticalWarnings = [];
+  suppliers.forEach(s => {
+    (s.crossSignalWarnings || []).forEach(w => {
+      criticalWarnings.push({
+        ...w,
+        supplierCode: s.code,
+        supplier: s
+      });
+    });
+  });
+
   const getTabMeta = () => {
     switch (activeTab) {
       case 'overview':
-        return { title: 'Procurement Risk Intelligence', subtitle: 'Executive overview of multi-tier supplier vulnerabilities and price exposure' };
+        return { title: 'Procurement Risk Intelligence', subtitle: 'Calculated multi-vector supplier exposure, price variances, and stockout hazards' };
       case 'suppliers':
-        return { title: 'Supplier Master Directory', subtitle: 'Comprehensive vendor catalog with compliance, quality, and contract metrics' };
+        return { title: 'Supplier Master Directory', subtitle: 'Audited vendor catalog with linked purchase orders and inspection lots' };
       case 'risk':
-        return { title: 'Deep Risk Analysis', subtitle: 'Root-cause telemetry across quality, pricing, lead time, and single-source dependencies' };
+        return { title: 'Deep Risk Analysis & Scenarios', subtitle: 'Deterministic 5-vector scoring and cross-signal operational diagnostics' };
       case 'decisions':
-        return { title: 'Decision Pipeline & Actions', subtitle: 'Human-in-the-loop procurement intervention drafts ready for executive review' };
+        return { title: 'Decision Pipeline & Actions', subtitle: 'Evidence-backed procurement intervention blueprints ready for executive approval' };
       case 'activity':
-        return { title: 'Live Telemetry & Audit Logs', subtitle: 'Immutable chronological event stream of supplier variances and compliance warnings' };
+        return { title: 'Live Telemetry & Audit Logs', subtitle: 'Immutable chronological event stream of invoice variances and compliance milestones' };
       default:
         return { title: 'SupplyShield AI', subtitle: 'Supplier Risk Intelligence' };
     }
@@ -86,7 +105,7 @@ export function Header({
               border: '1px solid rgba(14, 165, 233, 0.25)',
               letterSpacing: '0.03em'
             }}>
-              <Sparkles size={11} /> Phase 1 Local
+              <Sparkles size={11} /> Phase 2 Intelligence
             </span>
           </div>
           <p style={{ 
@@ -107,7 +126,7 @@ export function Header({
           <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
-            placeholder="Search suppliers..."
+            placeholder="Search suppliers & parts..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input-text"
@@ -115,15 +134,33 @@ export function Header({
           />
         </div>
 
+        {/* Methodology & Formulas Modal Trigger */}
+        <button 
+          onClick={onOpenMethodology}
+          className="btn btn-secondary btn-sm"
+          title="View Risk Scoring Methodology & Mathematical Equations"
+        >
+          <BookOpen size={13} style={{ color: 'var(--teal-primary)' }} />
+          <span className="header-btn-label">Methodology</span>
+        </button>
+
+        {/* Notification Bell Dropdown */}
+        <NotificationDropdown 
+          warnings={criticalWarnings}
+          isOpen={isNotifOpen}
+          onToggle={() => setIsNotifOpen(!isNotifOpen)}
+          onInspectSupplier={onInspectSupplier}
+        />
+
         {/* Simulate Refresh Button */}
         <button 
           onClick={onRefresh}
           className="btn btn-secondary btn-sm"
           disabled={isLoading}
-          title="Simulate refreshing telemetry stream and recalculating scores"
+          title="Recalculate 5-vector risk indices from source transactions"
         >
           <RotateCw size={13} className={isLoading ? 'spin' : ''} style={{ color: 'var(--teal-primary)' }} />
-          <span className="header-btn-label">{isLoading ? 'Refreshing...' : 'Sync Telemetry'}</span>
+          <span className="header-btn-label">{isLoading ? 'Auditing...' : 'Sync Telemetry'}</span>
         </button>
 
         {/* Test Error State Toggle Button */}

@@ -500,3 +500,82 @@ h1, h2, h3, h4, h5, h6 {
 .pulse {
   animation: pulseGlow 2s infinite ease-in-out;
 }
+
+/* Range Sliders for What-If Simulator */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--border-medium);
+  border-radius: 3px;
+  outline: none;
+  transition: background 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--teal-primary);
+  border: 2px solid #ffffff;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(14, 165, 233, 0.5);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 12px rgba(14, 165, 233, 0.8);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--teal-primary);
+  border: 2px solid #ffffff;
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(14, 165, 233, 0.5);
+}
+
+/* Smooth Skeleton Loader */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-card-elevated) 25%, var(--bg-card-hover) 50%, var(--bg-card-elevated) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Card Entrance Stagger Animation */
+.card, .table-responsive-container {
+  animation: cardFadeUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes cardFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduced Motion Accessibility Compliance */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

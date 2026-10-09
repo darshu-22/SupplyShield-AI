@@ -8,6 +8,8 @@ export function OverviewView({
   suppliers = [], 
   onInspectSupplier, 
   onAnalyseSupplier,
+  onOpenEvidence,
+  onOpenSimulator,
   currentRiskFilter,
   onSelectRiskFilter,
   pendingActionsCount,
@@ -46,6 +48,7 @@ export function OverviewView({
         currentRiskFilter={currentRiskFilter}
         onSelectRiskFilter={onSelectRiskFilter}
         onInspectSupplier={onInspectSupplier}
+        onOpenSimulator={onOpenSimulator}
       />
 
       {/* Main Supplier Registry Table */}
@@ -65,6 +68,8 @@ export function OverviewView({
           suppliers={suppliers}
           onInspectSupplier={onInspectSupplier}
           onAnalyseSupplier={onAnalyseSupplier}
+          onOpenEvidence={onOpenEvidence}
+          onOpenSimulator={onOpenSimulator}
           externalRiskFilter={currentRiskFilter}
           setExternalRiskFilter={onSelectRiskFilter}
         />

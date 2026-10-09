@@ -6,6 +6,8 @@ export function SuppliersView({
   suppliers = [], 
   onInspectSupplier, 
   onAnalyseSupplier,
+  onOpenEvidence,
+  onOpenSimulator,
   currentRiskFilter,
   onSelectRiskFilter 
 }) {
@@ -170,6 +172,8 @@ export function SuppliersView({
         suppliers={suppliers}
         onInspectSupplier={onInspectSupplier}
         onAnalyseSupplier={onAnalyseSupplier}
+        onOpenEvidence={onOpenEvidence}
+        onOpenSimulator={onOpenSimulator}
         externalRiskFilter={currentRiskFilter}
         setExternalRiskFilter={onSelectRiskFilter}
       />

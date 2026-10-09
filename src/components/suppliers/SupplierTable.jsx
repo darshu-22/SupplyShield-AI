@@ -6,6 +6,8 @@ import {
   TrendingUp, 
   ShieldCheck, 
   FileText,
+  FileSearch,
+  Sliders,
   X
 } from 'lucide-react';
 import { RiskBadge, CertificateBadge } from '../common/Badge';
@@ -15,6 +17,8 @@ export function SupplierTable({
   suppliers = [], 
   onInspectSupplier, 
   onAnalyseSupplier,
+  onOpenEvidence,
+  onOpenSimulator,
   externalRiskFilter,
   setExternalRiskFilter 
 }) {
@@ -235,6 +239,11 @@ export function SupplierTable({
                     Stock Coverage <ArrowUpDown size={12} />
                   </div>
                 </th>
+                <th style={{ cursor: 'pointer' }} onClick={() => handleSort('leadTimeCoverageGapDays')}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    Lead-Time Gap <ArrowUpDown size={12} />
+                  </div>
+                </th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -361,14 +370,54 @@ export function SupplierTable({
                       </div>
                     </td>
 
+                    {/* Lead-Time Coverage Gap */}
+                    <td>
+                      <div className="mono-num" style={{ 
+                        fontWeight: 700,
+                        color: (supplier.leadTimeCoverageGapDays || 0) < 0 ? 'var(--risk-high-text)' : 'var(--risk-low-text)'
+                      }}>
+                        {(supplier.leadTimeCoverageGapDays || 0) > 0 ? `+${supplier.leadTimeCoverageGapDays}d` : `${supplier.leadTimeCoverageGapDays}d`}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                        {(supplier.leadTimeCoverageGapDays || 0) < 0 ? 'Stockout Gap' : 'Safe Surplus'}
+                      </div>
+                    </td>
+
                     {/* Actions */}
                     <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        {/* Evidence Explorer Button */}
+                        {onOpenEvidence && (
+                          <button
+                            onClick={() => onOpenEvidence(supplier)}
+                            className="btn btn-secondary btn-sm"
+                            title="Open Evidence Explorer (audited POs & tests)"
+                            style={{ padding: '4px 8px' }}
+                          >
+                            <FileSearch size={13} style={{ color: 'var(--teal-primary)' }} />
+                            <span>Evidence</span>
+                          </button>
+                        )}
+
+                        {/* What-If Simulator Button */}
+                        {onOpenSimulator && (
+                          <button
+                            onClick={() => onOpenSimulator(supplier)}
+                            className="btn btn-subtle btn-sm"
+                            title="Simulate What-If sensitivity scenario"
+                            style={{ padding: '4px 8px', color: 'var(--teal-primary)' }}
+                          >
+                            <Sliders size={13} />
+                            <span>What-If</span>
+                          </button>
+                        )}
+
                         {/* Inspect Details button */}
                         <button
                           onClick={() => onInspectSupplier && onInspectSupplier(supplier)}
                           className="btn btn-secondary btn-sm"
                           title="View supplier evidence & warnings"
+                          style={{ padding: '4px 8px' }}
                         >
                           <FileText size={13} />
                           <span>Inspect</span>
@@ -379,6 +428,7 @@ export function SupplierTable({
                           onClick={() => onAnalyseSupplier && onAnalyseSupplier(supplier)}
                           className="btn btn-primary btn-sm"
                           title="Open preliminary rule-based diagnostic analysis"
+                          style={{ padding: '4px 8px' }}
                         >
                           <Sparkles size={13} />
                           <span>Analyse</span>

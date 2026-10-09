@@ -213,15 +213,27 @@ export function RiskDistribution({
             borderTop: '1px solid rgba(244, 63, 94, 0.2)'
           }}>
             <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-              Stock: 25 days remaining
+              Stock: 25d buffer (Gap: -87d)
             </span>
-            <button 
-              onClick={() => onInspectSupplier && onInspectSupplier(criticalSupplier)}
-              className="btn btn-primary btn-sm"
-              style={{ fontSize: '0.78rem' }}
-            >
-              Inspect Evidence <ArrowRight size={13} />
-            </button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {onOpenSimulator && (
+                <button 
+                  onClick={() => onOpenSimulator(criticalSupplier)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem' }}
+                  title="Simulate What-If intervention"
+                >
+                  What-If
+                </button>
+              )}
+              <button 
+                onClick={() => onInspectSupplier && onInspectSupplier(criticalSupplier)}
+                className="btn btn-primary btn-sm"
+                style={{ fontSize: '0.78rem' }}
+              >
+                Inspect Evidence <ArrowRight size={13} />
+              </button>
+            </div>
           </div>
         </div>
       )}

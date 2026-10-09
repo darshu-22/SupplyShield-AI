@@ -10,6 +10,9 @@ import { DecisionsView } from './components/views/DecisionsView';
 import { ActivityView } from './components/views/ActivityView';
 import { SupplierDetailModal } from './components/suppliers/SupplierDetailModal';
 import { SupplierAnalysisModal } from './components/suppliers/SupplierAnalysisModal';
+import { EvidenceExplorerModal } from './components/evidence/EvidenceExplorerModal';
+import { RiskSimulatorModal } from './components/simulator/RiskSimulatorModal';
+import { MethodologyModal } from './components/methodology/MethodologyModal';
 import { LoadingState, ErrorBanner } from './components/common/StateViews';
 
 export function App() {
@@ -25,6 +28,9 @@ export function App() {
   // Modals & Panels
   const [inspectingSupplier, setInspectingSupplier] = useState(null);
   const [analysingSupplier, setAnalysingSupplier] = useState(null);
+  const [evidenceSupplier, setEvidenceSupplier] = useState(null);
+  const [simulatorSupplier, setSimulatorSupplier] = useState(null);
+  const [isMethodologyOpen, setIsMethodologyOpen] = useState(false);
 
   // Layout & UI States
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -46,7 +52,7 @@ export function App() {
     setHasError(false);
     setTimeout(() => {
       setIsLoading(false);
-      triggerToast('Telemetry synchronized successfully. Risk scores recalculated.');
+      triggerToast('Telemetry synchronized successfully. Risk scores recalculated from source records.');
     }, 650);
   };
 
@@ -176,6 +182,9 @@ export function App() {
           onToggleError={handleToggleError}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
+          onOpenMethodology={() => setIsMethodologyOpen(true)}
+          suppliers={suppliers}
+          onInspectSupplier={setInspectingSupplier}
         />
 
         <main className="content-container">
@@ -201,6 +210,8 @@ export function App() {
                   suppliers={displayedSuppliers}
                   onInspectSupplier={setInspectingSupplier}
                   onAnalyseSupplier={setAnalysingSupplier}
+                  onOpenEvidence={setEvidenceSupplier}
+                  onOpenSimulator={setSimulatorSupplier}
                   currentRiskFilter={currentRiskFilter}
                   onSelectRiskFilter={setCurrentRiskFilter}
                   pendingActionsCount={pendingDecisionsCount}
@@ -213,6 +224,8 @@ export function App() {
                   suppliers={displayedSuppliers}
                   onInspectSupplier={setInspectingSupplier}
                   onAnalyseSupplier={setAnalysingSupplier}
+                  onOpenEvidence={setEvidenceSupplier}
+                  onOpenSimulator={setSimulatorSupplier}
                   currentRiskFilter={currentRiskFilter}
                   onSelectRiskFilter={setCurrentRiskFilter}
                 />
@@ -223,6 +236,8 @@ export function App() {
                   suppliers={displayedSuppliers}
                   onInspectSupplier={setInspectingSupplier}
                   onAnalyseSupplier={setAnalysingSupplier}
+                  onOpenEvidence={setEvidenceSupplier}
+                  onOpenSimulator={setSimulatorSupplier}
                 />
               )}
 
@@ -252,6 +267,8 @@ export function App() {
           supplier={inspectingSupplier}
           onClose={() => setInspectingSupplier(null)}
           onOpenAnalysis={(supp) => setAnalysingSupplier(supp)}
+          onOpenEvidence={(supp) => setEvidenceSupplier(supp)}
+          onOpenSimulator={(supp) => setSimulatorSupplier(supp)}
         />
       )}
 
@@ -261,8 +278,40 @@ export function App() {
           supplier={analysingSupplier}
           onClose={() => setAnalysingSupplier(null)}
           onQueueDecision={handleQueueDecision}
+          onOpenSimulator={(supp) => setSimulatorSupplier(supp)}
         />
       )}
+
+      {/* Evidence Explorer Modal */}
+      {evidenceSupplier && (
+        <EvidenceExplorerModal 
+          supplier={evidenceSupplier}
+          onClose={() => setEvidenceSupplier(null)}
+          onOpenSimulator={(supp) => {
+            setEvidenceSupplier(null);
+            setSimulatorSupplier(supp);
+          }}
+        />
+      )}
+
+      {/* Interactive What-If Risk Simulator Modal */}
+      {simulatorSupplier && (
+        <RiskSimulatorModal 
+          supplier={simulatorSupplier}
+          onClose={() => setSimulatorSupplier(null)}
+          onStagePlan={(plan) => {
+            setDecisions(prev => [plan, ...prev]);
+            triggerToast(`Hypothetical simulation staged: "${plan.actionTitle}"`);
+            setActiveTab('decisions');
+          }}
+        />
+      )}
+
+      {/* Risk Scoring Methodology Modal */}
+      <MethodologyModal 
+        isOpen={isMethodologyOpen}
+        onClose={() => setIsMethodologyOpen(false)}
+      />
     </div>
   );
 }

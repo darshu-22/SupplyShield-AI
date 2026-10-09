@@ -9,19 +9,29 @@ import {
   MapPin, 
   Calendar, 
   TrendingUp, 
-  Package 
+  Package,
+  FileSearch,
+  Sliders
 } from 'lucide-react';
 import { RiskBadge, CriticalityBadge } from '../common/Badge';
 
-export function SupplierDetailModal({ supplier, onClose, onOpenAnalysis }) {
+export function SupplierDetailModal({ 
+  supplier, 
+  onClose, 
+  onOpenAnalysis,
+  onOpenEvidence,
+  onOpenSimulator 
+}) {
   if (!supplier) return null;
+
+  const lots = supplier.inspectionLots || [];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div 
         className="modal-content" 
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '820px' }}
+        style={{ maxWidth: '860px', maxHeight: '92vh' }}
       >
         {/* Modal Header */}
         <div className="modal-header">
@@ -81,11 +91,11 @@ export function SupplierDetailModal({ supplier, onClose, onOpenAnalysis }) {
 
         {/* Modal Body */}
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Key Metrics 4-Grid */}
+          {/* Key Metrics 5-Grid */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-            gap: '12px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+            gap: '10px'
           }}>
             {/* Quality Rejection */}
             <div style={{
@@ -159,10 +169,83 @@ export function SupplierDetailModal({ supplier, onClose, onOpenAnalysis }) {
                 {supplier.stockCoverageDays} Days
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                Target buffer: {supplier.targetSafetyStockDays} days
+                Target: {supplier.targetSafetyStockDays} days
+              </div>
+            </div>
+
+            {/* Lead-Time Gap */}
+            <div style={{
+              backgroundColor: (supplier.leadTimeCoverageGapDays || 0) < 0 ? 'var(--risk-high-bg)' : 'var(--bg-input)',
+              border: `1px solid ${(supplier.leadTimeCoverageGapDays || 0) < 0 ? 'var(--risk-high-border)' : 'var(--border-subtle)'}`,
+              borderRadius: 'var(--radius-sm)',
+              padding: '12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lead-Time Gap</span>
+                <span className="mono-num" style={{ fontSize: '0.75rem', fontWeight: 700, color: (supplier.leadTimeCoverageGapDays || 0) < 0 ? 'var(--risk-high-text)' : 'var(--risk-low-text)' }}>
+                  {supplier.leadTimeWeeks}w lead
+                </span>
+              </div>
+              <div className="mono-num" style={{ fontSize: '1.25rem', fontWeight: 700, color: (supplier.leadTimeCoverageGapDays || 0) < 0 ? 'var(--risk-high-text)' : 'var(--risk-low-text)' }}>
+                {(supplier.leadTimeCoverageGapDays || 0) > 0 ? `+${supplier.leadTimeCoverageGapDays}d` : `${supplier.leadTimeCoverageGapDays}d`}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: (supplier.leadTimeCoverageGapDays || 0) < 0 ? 'var(--risk-high-text)' : 'var(--text-secondary)', marginTop: '2px' }}>
+                {(supplier.leadTimeCoverageGapDays || 0) < 0 ? 'Stockout deficit' : 'Safe buffer surplus'}
               </div>
             </div>
           </div>
+
+          {/* SVG Quality Inspection Trend Sparkline */}
+          {lots.length > 0 && (
+            <div style={{
+              backgroundColor: 'var(--bg-card-elevated)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '14px 18px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <div>
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Quality Inspection Trend Across Historical Lots ({lots.length} Batches)
+                  </h4>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    Visual progression of lot rejection percentages
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: supplier.rejectionRate > 4 ? 'var(--risk-high-text)' : '#86efac', fontWeight: 600 }}>
+                  Latest: {supplier.rejectionRate}%
+                </div>
+              </div>
+
+              {/* Sparkline Visual */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '60px', paddingTop: '10px' }}>
+                {lots.map((lot, idx) => {
+                  const heightPct = Math.min(100, Math.max(15, (lot.rejectionRatePct / 10) * 100));
+                  const isRed = lot.rejectionRatePct >= 5;
+                  return (
+                    <div key={lot.lotId} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                      <span className="mono-num" style={{ fontSize: '0.68rem', fontWeight: 700, color: isRed ? 'var(--risk-high-text)' : 'var(--text-secondary)' }}>
+                        {lot.rejectionRatePct}%
+                      </span>
+                      <div 
+                        style={{
+                          width: '100%',
+                          height: `${heightPct}%`,
+                          backgroundColor: isRed ? 'var(--risk-high-solid)' : lot.rejectionRatePct > 1 ? 'var(--risk-med-solid)' : 'var(--teal-primary)',
+                          borderRadius: '3px 3px 0 0',
+                          transition: 'height 0.3s ease'
+                        }}
+                        title={`Lot ${lot.lotId}: ${lot.rejectionRatePct}% rejections (${lot.rejectedUnits}/${lot.inspectedUnits})`}
+                      />
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                        B{idx + 1}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Supplied Item Banner */}
           <div style={{
@@ -257,9 +340,36 @@ export function SupplierDetailModal({ supplier, onClose, onOpenAnalysis }) {
 
         {/* Modal Footer */}
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-secondary">
-            Close Panel
+          {onOpenEvidence && (
+            <button 
+              onClick={() => {
+                onClose();
+                onOpenEvidence(supplier);
+              }} 
+              className="btn btn-secondary"
+            >
+              <FileSearch size={14} style={{ color: 'var(--teal-primary)' }} />
+              Evidence Explorer
+            </button>
+          )}
+
+          {onOpenSimulator && (
+            <button 
+              onClick={() => {
+                onClose();
+                onOpenSimulator(supplier);
+              }} 
+              className="btn btn-secondary"
+            >
+              <Sliders size={14} style={{ color: 'var(--teal-primary)' }} />
+              What-If Simulator
+            </button>
+          )}
+
+          <button onClick={onClose} className="btn btn-subtle">
+            Close
           </button>
+          
           <button 
             onClick={() => {
               onClose();
