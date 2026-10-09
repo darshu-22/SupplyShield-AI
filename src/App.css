@@ -1,0 +1,52 @@
+/* App.css - Specific Component Layout & Micro-Interactions */
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .mobile-toggle-btn {
+    display: flex !important;
+  }
+  
+  .sidebar-normal {
+    transform: translateX(-100%);
+  }
+
+  .sidebar-open {
+    transform: translateX(0);
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+  }
+}
+
+@media (min-width: 1025px) {
+  .sidebar-normal {
+    transform: translateX(0) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .header-search {
+    display: none;
+  }
+  
+  .header-subtitle {
+    display: none !important;
+  }
+
+  .header-btn-label {
+    display: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .header-subtitle {
+    display: block !important;
+  }
+}
