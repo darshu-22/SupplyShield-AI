@@ -47,7 +47,8 @@ export function AgentInvestigationReportModal({
         draftDetails: `${decision.reason} Next step: ${decision.suggestedNextStep}`,
         status: "Pending Approval",
         approvedAt: null,
-        riskReductionEstimate: decision.priorityRationale || "Mitigates operational exposure"
+        riskReductionEstimate: decision.priorityRationale || "Mitigates operational exposure",
+        recommendationId: decision.recommendationId
       });
       setStagedActionIds(prev => [...prev, decision.recommendationId]);
     }

@@ -1,10 +1,10 @@
 # SupplyShield AI — Agentic Supplier Risk Intelligence
 
-> **Phase 4: AI Procurement Assistant & What-If Intelligence**
+> **Phase 6: Procurement Action, Approval & Audit Workflow**
 
 SupplyShield AI is an enterprise supplier intelligence platform designed for procurement directors and supply chain leaders. It monitors supply chain vulnerabilities across quality inspection trends, unauthorized price variance leakage, compliance accreditation cliffs, and factory stockout hazards.
 
-In **Phase 4**, the platform introduces an interactive **AI Procurement Assistant & What-If Intelligence Engine**. Users can query the supplier portfolio in natural language, receive evidence-backed explanations citing actual transactional records (POs, inspection lots, certificates), and execute hypothetical risk mitigation scenarios with deterministic, non-mutating risk recalculation. All operations run 100% locally and deterministically.
+In **Phase 6**, the platform delivers a complete, explainable **Human-in-the-Loop Procurement Action, Approval & Audit Workflow**. It enforces a strict finite-state machine (FSM) across action lifecycles, provides an upgraded Decision Center with real-time KPI status metrics, mandates executive sign-off with documented justifications, and records an append-only, tamper-proof governance audit trail with local persistence. All operations run 100% locally and deterministically.
 
 ---
 
@@ -237,14 +237,105 @@ Assistant responses featuring recommendations include a **"Stage Action Draft"**
 
 ---
 
-## 8. Automated Test Suite (`tests/run-tests.js`)
+## 8. Procurement Action, Approval & Audit Workflow (Phase 6)
+
+Phase 6 implements a comprehensive, human-in-the-loop governance system for the procurement action lifecycle. It bridges agentic intelligence and conversational discovery directly into executive sign-off, work tracking, and append-only audit verification.
+
+```
+                           ┌──────────────────────────────────────────────┐
+                           │      Agent Dossier / AI Assistant Staging    │
+                           │     ("Issue Contract Price Dispute (+7.4%)") │
+                           └──────────────────────┬───────────────────────┘
+                                                  │
+                                                  ▼
+                                      ┌───────────────────────┐
+                                      │         DRAFT         │
+                                      └───────────┬───────────┘
+                                                  │ Submit for Approval
+                                                  ▼
+                                      ┌───────────────────────┐
+                     ┌───────────────►│   PENDING_APPROVAL    │◄──────────────┐
+                     │                └─────┬───────────┬─────┘               │
+                     │                      │           │                     │
+                     │             Approve  │           │  Reject (Mandatory  │
+                     │                      ▼           ▼  Rationale Reason)  │
+                     │            ┌───────────────┐   ┌───────────────┐       │
+                     │            │   APPROVED    │   │   REJECTED    │       │
+                     │            └───────┬───────┘   └───────────────┘       │
+                     │                    │               (Terminal)          │
+                     │         Start Work │                                   │
+                     │                    ▼                                   │
+                     │            ┌───────────────┐                           │
+                     │            │  IN_PROGRESS  │                           │
+                     │            └───────┬───────┘                           │
+                     │                    │                                   │
+                     │      Mark Complete │                                   │
+                     │                    ▼                                   │
+                     │            ┌───────────────┐                           │
+                     │            │   COMPLETED   │                           │
+                     │            └───────────────┘                           │
+                     │               (Terminal)                               │
+                     │                                                        │
+                     │                  CANCELLED                             │
+                     └──────────────── (Terminal Reason Required) ────────────┘
+```
+
+### A. Finite-State Machine (FSM) Governance Rules (`src/workflow/actionLifecycleService.js`)
+The action lifecycle strictly enforces valid transitions:
+- `DRAFT` → `PENDING_APPROVAL`, `CANCELLED`
+- `PENDING_APPROVAL` → `APPROVED`, `REJECTED`, `CANCELLED`
+- `APPROVED` → `IN_PROGRESS`, `CANCELLED`
+- `IN_PROGRESS` → `COMPLETED`, `CANCELLED`
+- **Terminal States**: `REJECTED`, `COMPLETED`, `CANCELLED` cannot transition silently into unrelated states.
+- **Mandatory Justification**: Rejection and cancellation strictly require a documented rationale reason before the state transition can execute.
+- **Human Reviewer Stamp**: Approvals, rejections, and work status updates record the exact reviewer name and role (e.g., `Sarah Chen (Director of Procurement)`).
+
+### B. Upgraded Procurement Decision Center (`src/components/views/DecisionsView.jsx`)
+- **Status Summary KPI Cards**: Derived from active action records (`All`, `Pending Review`, `Approved`, `In Progress`, `Completed`, `Rejected/Cancelled`).
+- **Actions Pipeline**:
+  - Multi-attribute text search across Action ID, title, supplier name, and evidence.
+  - Multi-criteria filtering by Status, Priority, Supplier, and Category.
+  - Sorting by Urgency First, Newest First, and Oldest First.
+  - Permitted transition controls directly on action cards (Submit, Approve, Reject Dialog, Start Work, Mark Complete, Cancel Dialog).
+- **Action Detail & Timeline Modal (`src/components/decisions/ActionDetailModal.jsx`)**:
+  - Full intervention blueprint, financial exposure, urgency rating, and underlying transaction evidence.
+  - Contextual transition buttons right inside the modal.
+  - Embedded vertical visual audit timeline tracking every event from staging to completion.
+- **Mandatory Reason Dialog (`src/components/decisions/TransitionReasonModal.jsx`)**:
+  - Presents curated industry presets (e.g., *"Alternative supplier qualified"*, *"Price variance settled with credit memo"*) alongside custom justification text entry.
+  - Form validation blocks empty submissions.
+- **Reviewer Switcher**: Allows toggling between authorized demo personas (`Sarah Chen — Director of Procurement`, `Marcus Vance — VP Supply Chain`, `Elena Rostova — Lead Quality Auditor`) to test multi-role governance sign-offs.
+
+### C. Append-Only Audit Trail Architecture (`src/workflow/auditService.js`)
+- **Immutability Guarantee**: Audit records are created with unique IDs (`AUD-xxxx`) and frozen in memory to prevent modification or purging.
+- **Event Attributes**:
+  - `id`: Unique audit identifier.
+  - `actionId`: Linked procurement action.
+  - `eventType`: `ACTION_CREATED`, `SUBMITTED_FOR_APPROVAL`, `ACTION_APPROVED`, `ACTION_REJECTED`, `WORK_STARTED`, `ACTION_COMPLETED`, `ACTION_CANCELLED`.
+  - `fromStatus` & `toStatus`: Exact state transition.
+  - `actor`: Reviewer identity.
+  - `timestamp`: ISO-8601 timestamp.
+  - `reason`: Documented justification.
+  - `evidenceReferences`: Transactional records cited.
+- **Dedicated Audit Log View**: Provides an interactive table with event type filtering, search, and one-click JSON export.
+
+### D. Local Persistence & Reliability Architecture (`src/workflow/persistenceService.js`)
+- **Safe Browser Storage**: Actions and audit events persist across page refreshes via `localStorage` (`supplyshield_actions_v1` and `supplyshield_audit_v1`).
+- **Schema Validation & Error Recovery**: Normalizes status strings, validates required fields, and recovers gracefully from corrupted or partial storage states.
+- **Sequential Stable Action IDs**: Generates collision-free IDs in the format `ACT-2026-xxx`.
+- **Duplicate Staging Prevention**: Inspects active actions before staging recommendations from the Assistant or Agent Dossiers. If an active action already exists for that recommendation or supplier initiative, it warns the user and opens the existing record instead of creating duplicates.
+- **Reset to Seeds**: One-click reset restores the benchmark demo dataset and initial audit history.
+
+---
+
+## 9. Automated Test Suite (`tests/run-tests.js`)
 
 Run the test suite with:
 ```bash
 npm test
 ```
 
-The test runner executes **117 automated unit tests** across Phases 2, 3, and 4:
+The test runner executes **165 automated unit tests** across Phases 2, 3, 4, and 6:
 
 ```
 =======================================================
@@ -273,81 +364,101 @@ The test runner executes **117 automated unit tests** across Phases 2, 3, and 4:
 =======================================================
  SupplyShield AI — Phase 4 Assistant & What-If Verification
 =======================================================
-[15. Supplier Name & Entity Recognition Tests]
-  ✓ PASS: Recognizes 'Apex Precision Castings' as Supplier A (SUP-001)
-  ✓ PASS: Recognizes 'Vanguard' as Supplier B (SUP-002)
-  ✓ PASS: Recognizes 'HydroTech' and 'seals' as Supplier C (SUP-003)
-  ✓ PASS: Recognizes exact ID 'SUP-006' as Supplier F
-  ✓ PASS: Returns null when no supplier entity is present
-
-[16. Every Supported Intent Category Test]
-  ✓ PASS: Classifies intent: RISK_RANKING
-  ✓ PASS: Classifies intent: SUPPLIER_EXPLANATION
-  ✓ PASS: Classifies intent: QUALITY_INSPECTION
-  ✓ PASS: Classifies intent: PRICE_VARIANCE
-  ✓ PASS: Classifies intent: DELIVERY_PERFORMANCE
-  ✓ PASS: Classifies intent: COMPLIANCE_EXPIRY
-  ✓ PASS: Classifies intent: INVENTORY_COVERAGE
-  ✓ PASS: Classifies intent: RECOMMENDED_ACTIONS
-  ✓ PASS: Classifies intent: CROSS_SIGNAL_EXPLANATION
-  ✓ PASS: Classifies intent: WHAT_IF_SCENARIO
-  ✓ PASS: Extracts stock coverage delta (+30 days) from query
-  ✓ PASS: Extracts rejection rate delta (-3%) from query
-
-[17. Ambiguous Questions & Clarification Behavior Tests]
-  ✓ PASS: Classifies ambiguous query as AMBIGUOUS_CLARIFICATION
-  ✓ PASS: Assistant generates clarification response for ambiguous metric query
-  ✓ PASS: Clarification politely requests supplier specification
-  ✓ PASS: Provides helpful follow-up question suggestions
-
-[18. Evidence Attribution in Assistant Answers Tests]
-  ✓ PASS: Assistant includes structured evidence citations in answer
-  ✓ PASS: Cites specific purchase order numbers for Supplier A
-  ✓ PASS: Cites exact verified $74,000 overpayment in observed facts
-  ✓ PASS: Cites specific inspection lot numbers for Supplier A
-  ✓ PASS: Cites verified 9.2% latest lot defect rate
-
-[19. What-If Scenario Engine & Non-Mutation Tests]
-  ✓ PASS: What-If scenario executes successfully
-  ✓ PASS: Explicitly flags outcome as isHypothetical = true
-  ✓ PASS: Hypothetical mitigation significantly reduces risk score
-  ✓ PASS: Score delta reflects comprehensive multi-vector relief
-  ✓ PASS: Tracks specific changed metrics
-  ✓ PASS: Tracks specific unchanged metrics
-  ✓ PASS: STRICT NON-MUTATION: Original supplierA.riskScore remains 100% untouched
-  ✓ PASS: STRICT NON-MUTATION: Original score breakdown remains 100% untouched
-  ✓ PASS: Handles missing supplier in what-if engine gracefully
-
-[20. Deterministic Output & Reproducibility Tests]
-  ✓ PASS: Identical intent produced across repeated queries
-  ✓ PASS: Identical content generated deterministically
-  ✓ PASS: Identical observed facts generated deterministically
-
-[21. Graceful Error Handling Tests]
-  ✓ PASS: Gracefully handles empty query string
-  ✓ PASS: Provides helpful prompt for empty query
-  ✓ PASS: Gracefully handles null query
+[15. Supplier Name & Entity Recognition Tests] (5 tests)
+[16. Every Supported Intent Category Test] (12 tests)
+[17. Ambiguous Questions & Clarification Behavior Tests] (4 tests)
+[18. Evidence Attribution in Assistant Answers Tests] (5 tests)
+[19. What-If Scenario Engine & Non-Mutation Tests] (8 tests)
+[20. Deterministic Output & Reproducibility Tests] (3 tests)
+[21. Graceful Error Handling Tests] (3 tests)
 
 =======================================================
- Test Execution Summary: 117 Passed, 0 Failed
+ SupplyShield AI — Phase 6 Workflow & Audit Verification
+=======================================================
+[22. Action Lifecycle Valid Transitions Tests]
+  ✓ PASS: Permits DRAFT -> PENDING_APPROVAL
+  ✓ PASS: Transitions action to PENDING_APPROVAL
+  ✓ PASS: Permits PENDING_APPROVAL -> APPROVED
+  ✓ PASS: Transitions action to APPROVED
+  ✓ PASS: Records approving reviewer identity
+  ✓ PASS: Permits APPROVED -> IN_PROGRESS
+  ✓ PASS: Transitions action to IN_PROGRESS
+  ✓ PASS: Permits IN_PROGRESS -> COMPLETED
+  ✓ PASS: Transitions action to COMPLETED
+
+[23. Invalid Transitions & State Machine Enforcement Tests]
+  ✓ PASS: Disallows DRAFT -> APPROVED (must be submitted first)
+  ✓ PASS: Disallows DRAFT -> IN_PROGRESS
+  ✓ PASS: Disallows DRAFT -> COMPLETED
+  ✓ PASS: Disallows PENDING_APPROVAL -> COMPLETED
+  ✓ PASS: Terminal: Disallows REJECTED -> APPROVED
+  ✓ PASS: Terminal: Disallows COMPLETED -> IN_PROGRESS
+  ✓ PASS: Terminal: Disallows CANCELLED -> DRAFT
+  ✓ PASS: validateTransition returns false for invalid transition
+
+[24. Mandatory Rejection & Cancellation Reasons Tests]
+  ✓ PASS: Rejection with empty reason fails validation
+  ✓ PASS: Rejection with documented reason passes validation
+  ✓ PASS: Transitions to REJECTED
+  ✓ PASS: Records rejection reason
+  ✓ PASS: Cancellation with empty reason fails validation
+  ✓ PASS: Transitions to CANCELLED
+  ✓ PASS: Records cancellation reason
+
+[25. Audit Event Creation & Append-Only Immutability Tests]
+  ✓ PASS: Generates unique audit ID with AUD- prefix
+  ✓ PASS: Stamps correct event type
+  ✓ PASS: Flags event as local demonstration log
+  ✓ PASS: Appends event to audit log array
+  ✓ PASS: Frozen audit record guarantees immutability
+  ✓ PASS: getAuditTrailForAction filters correct events for actionId
+  ✓ PASS: filterAuditLog filters by eventType correctly
+
+[26. Stable Action IDs & Duplicate Recommendation Detection Tests]
+  ✓ PASS: Generates next sequential stable ID (ACT-2026-003)
+  ✓ PASS: Detects duplicate active recommendation for same supplier and title
+  ✓ PASS: Identifies exact duplicate action ID
+  ✓ PASS: Returns null when no matching active action exists
+
+[27. Persistence Validation & Recovery Tests]
+  ✓ PASS: validateActionRecord validates valid record
+  ✓ PASS: Normalizes status to ACTION_STATUS.PENDING_APPROVAL
+  ✓ PASS: Normalizes legacy 'Pending Approval' string
+  ✓ PASS: validateAuditEventRecord validates event record
+  ✓ PASS: validateActionRecord returns null for malformed object
+  ✓ PASS: createInitialSeedActionsAndAudit generates initial seed actions
+  ✓ PASS: createInitialSeedActionsAndAudit generates corresponding seed audit trail
+
+[28. Human Approval Enforcement & Governance Guarantees Tests]
+  ✓ PASS: DEFAULT_REVIEWER contains Sarah Chen
+  ✓ PASS: Approval fails if reviewer identity is missing
+  ✓ PASS: All agent recommendations enforce requiresHumanApproval = true
+
+[29. Filtering and Sorting Logic Tests]
+  ✓ PASS: filterActions filters by status correctly
+  ✓ PASS: sortActions places CRITICAL urgency first
+  ✓ PASS: sortActions places LOW urgency last
+
+=======================================================
+ Test Execution Summary: 165 Passed, 0 Failed
 =======================================================
 ```
 
 ---
 
-## 9. Available NPM Scripts
+## 10. Available NPM Scripts
 
 | Command | Description |
 |---|---|
 | `npm run dev` | Starts Vite local development server at `http://localhost:5173` |
-| `npm test` | Runs the 117-test suite verifying calculations, agents, orchestrator, and assistant |
+| `npm test` | Runs the 165-test suite verifying risk engine, agents, orchestrator, assistant, FSM, and audit log |
 | `npm run lint` | Runs `oxlint` across all project files (0 warnings, 0 errors) |
 | `npm run build` | Compiles production assets into `dist/` bundle |
 | `npm run preview` | Previews the production build locally |
 
 ---
 
-## 10. Project Directory Structure
+## 11. Project Directory Structure
 
 ```
 SupplyShield AI/
@@ -359,12 +470,16 @@ SupplyShield AI/
 ├── .gitignore                   # Excludes node_modules, dist, .env
 ├── README.md                    # Complete project documentation
 ├── tests/
-│   └── run-tests.js             # 117 automated unit tests across Phases 2, 3 & 4
+│   └── run-tests.js             # 165 automated unit tests across Phases 2, 3, 4 & 6
 ├── src/
 │   ├── main.jsx                 # React root bootstrap
 │   ├── App.jsx                  # Main application orchestrator & tab routing
 │   ├── index.css                # Global design system tokens, typography, dark navy theme
 │   ├── App.css                  # Animations, responsive breakpoints & micro-interactions
+│   ├── workflow/                # Action Lifecycle, Audit & Persistence (Phase 6)
+│   │   ├── actionLifecycleService.js # Finite-state machine, transitions & validators
+│   │   ├── auditService.js      # Append-only immutable audit trail logger
+│   │   └── persistenceService.js# LocalStorage serialization, validation & recovery
 │   ├── assistant/               # AI Procurement Assistant & What-If Engine (Phase 4)
 │   │   ├── assistantService.js  # Query orchestrator, evidence synthesizer, and adapter
 │   │   ├── intentRouter.js      # NLP tokenized router, entity recognizer, and parser
@@ -396,6 +511,9 @@ SupplyShield AI/
 │       │   └── AgentInvestigationReportModal.jsx# Comprehensive supplier decision dossier
 │       ├── assistant/           # Assistant UI components (Phase 4)
 │       │   └── AssistantView.jsx# Dedicated AI Assistant chat interface
+│       ├── decisions/           # Action Lifecycle UI components (Phase 6)
+│       │   ├── ActionDetailModal.jsx      # Detailed dossier & visual audit timeline modal
+│       │   └── TransitionReasonModal.jsx  # Rejection & cancellation rationale dialog
 │       ├── suppliers/
 │       │   ├── SupplierTable.jsx       # Table with lead-time gap and action triggers
 │       │   ├── SupplierDetailModal.jsx # Detail drawer with agent dossier launcher
@@ -410,17 +528,18 @@ SupplyShield AI/
 │           ├── OverviewView.jsx     # Executive command dashboard with Agentic Section
 │           ├── SuppliersView.jsx    # Master supplier directory with CSV export
 │           ├── RiskAnalysisView.jsx # Multi-vector risk view with Cross-Signal cards
-│           ├── DecisionsView.jsx    # Human-in-the-loop approval workflow
+│           ├── DecisionsView.jsx    # Upgraded Procurement Decision Center & Audit Log
 │           └── ActivityView.jsx     # Immutable telemetry event stream
 ```
 
 ---
 
-## 11. Current Limitations & Architecture Disclaimers
+## 12. Current Limitations & Architecture Disclaimers
 
+- **Human Approval & Decision Support**: Approval of an action grants operational sign-off to proceed with an internal intervention. It **never** claims that an external supplier was contacted or that a real-world enterprise ERP purchase order was altered.
+- **Demonstration Audit Log**: The audit trail is an append-only in-browser governance log persisted in browser `localStorage`. It demonstrates tamper-proof audit concepts but is not a cryptographic distributed ledger or backend compliance vault.
 - **Deterministic Assistant, Not an LLM**: The current procurement assistant is a deterministic, intent-and-data-driven assistant powered by semantic heuristics, transactional data mapping, and mathematical risk simulation. It is intentionally designed without external cloud LLM dependencies to run 100% locally with zero latency, zero cloud costs, and zero hallucinations.
-- **LLM-Ready Adapter Architecture**: The codebase is architected with a clean adapter interface in `src/assistant/assistantService.js`. When a cloud or local LLM (such as Gemini 1.5, Claude, or local Ollama) is configured in the future, the backend service can swap query processing with prompt-engineered tool calls without changing the UI architecture or component contracts.
 - **Synthetic Demonstration Dataset**: All suppliers, purchase orders, inspection lots, quality metrics, and parts are synthetic demonstration records created for benchmark evaluation.
-- **In-Memory Browser Session**: Chat conversations and staged interventions reside in local browser memory and reset on page reload or via the **"Clear Chat"** button.
-- **Zero Autonomous Execution**: The assistant never modifies real databases or ERP systems. All actions remain drafts until explicitly ratified by authorized personnel.
+- **Session State & Persistence**: Action records and audit entries persist across browser reloads via `localStorage` and can be reset to benchmark seeds at any time via the **"Reset Seeds"** control.
+
 

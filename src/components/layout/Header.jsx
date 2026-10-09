@@ -47,7 +47,7 @@ export function Header({
       case 'risk':
         return { title: 'Deep Risk Analysis & Scenarios', subtitle: 'Deterministic 5-vector scoring and cross-signal operational diagnostics' };
       case 'decisions':
-        return { title: 'Decision Pipeline & Actions', subtitle: 'Evidence-backed procurement intervention blueprints ready for executive approval' };
+        return { title: 'Procurement Decision Center', subtitle: 'Action lifecycle governance, executive sign-off, and append-only audit trail' };
       case 'activity':
         return { title: 'Live Telemetry & Audit Logs', subtitle: 'Immutable chronological event stream of invoice variances and compliance milestones' };
       default:

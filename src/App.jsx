@@ -1,6 +1,28 @@
 import React, { useState } from 'react';
 import './App.css';
-import { SUPPLIERS, INITIAL_ACTIONS, INITIAL_ACTIVITY_LOG } from './data/suppliers';
+import { SUPPLIERS, INITIAL_ACTIVITY_LOG } from './data/suppliers';
+import { 
+  ACTION_STATUS, 
+  DEFAULT_REVIEWER, 
+  normalizeActionStatus, 
+  getStatusLabel,
+  transitionAction,
+  findExistingActiveAction 
+} from './workflow/actionLifecycleService';
+import { 
+  createAuditEvent, 
+  appendAuditEvent, 
+  AUDIT_EVENT_TYPE,
+  getEventTypeForStatus 
+} from './workflow/auditService';
+import { 
+  loadPersistedActions, 
+  savePersistedActions, 
+  loadPersistedAuditLog, 
+  savePersistedAuditLog, 
+  generateStableActionId,
+  resetToInitialSeeds 
+} from './workflow/persistenceService';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { OverviewView } from './components/views/OverviewView';
@@ -20,7 +42,9 @@ import { LoadingState, ErrorBanner } from './components/common/StateViews';
 export function App() {
   const [activeTab, setActiveTab] = useState('overview');
   const [suppliers] = useState(SUPPLIERS);
-  const [decisions, setDecisions] = useState(INITIAL_ACTIONS);
+  const [decisions, setDecisions] = useState(() => loadPersistedActions());
+  const [auditLog, setAuditLog] = useState(() => loadPersistedAuditLog());
+  const [currentReviewer, setCurrentReviewer] = useState(DEFAULT_REVIEWER);
   const [activityLogs, setActivityLogs] = useState(INITIAL_ACTIVITY_LOG);
 
   // Filters & Search
@@ -64,56 +88,127 @@ export function App() {
     setHasError(!hasError);
   };
 
-  // Approve a Decision
-  const handleApproveAction = (actionId) => {
-    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    setDecisions(prev => prev.map(item => {
-      if (item.id === actionId) {
-        return {
-          ...item,
-          status: 'Approved',
-          approvedAt: `Today at ${timestamp}`
-        };
-      }
-      return item;
-    }));
+  // Transition an action across permitted lifecycle states
+  const handleTransitionAction = (actionId, targetStatus, { reason = '', reviewer = currentReviewer } = {}) => {
+    const targetAction = decisions.find(d => d.id === actionId);
+    if (!targetAction) return;
 
-    // Add entry to activity logs
-    const action = decisions.find(d => d.id === actionId);
-    if (action) {
+    try {
+      const updatedAction = transitionAction(targetAction, targetStatus, {
+        reason,
+        reviewer,
+        timestamp: new Date().toISOString()
+      });
+
+      const updatedDecisions = decisions.map(d => d.id === actionId ? updatedAction : d);
+      setDecisions(updatedDecisions);
+      savePersistedActions(updatedDecisions);
+
+      // Append immutable audit event
+      const eventType = getEventTypeForStatus(targetStatus);
+      const newAuditEvent = createAuditEvent({
+        actionId: targetAction.id,
+        actionTitle: targetAction.actionTitle,
+        supplierCode: targetAction.supplierCode,
+        eventType,
+        fromStatus: targetAction.status,
+        toStatus: targetStatus,
+        actor: reviewer,
+        reason: reason || null,
+        evidenceReferences: targetAction.evidenceSummary
+      });
+
+      const updatedAudit = appendAuditEvent(auditLog, newAuditEvent);
+      setAuditLog(updatedAudit);
+      savePersistedAuditLog(updatedAudit);
+
+      // Also append to activity logs stream
       const newLog = {
         id: `LOG-${Date.now()}`,
         timestamp: 'Just now',
-        supplierCode: action.supplierCode,
-        supplierName: action.supplierName,
-        severity: 'LOW',
-        eventType: 'Procurement Action Approved',
-        message: `Executive approval signed for: "${action.actionTitle}". Financial protection: ${action.financialValue}.`,
-        source: 'Procurement Console'
+        supplierCode: targetAction.supplierCode,
+        supplierName: targetAction.supplierName,
+        severity: targetStatus === ACTION_STATUS.REJECTED ? 'MEDIUM' : 'LOW',
+        eventType: `Action ${getStatusLabel(targetStatus)}`,
+        message: `${reviewer}: "${targetAction.actionTitle}" transitioned to ${getStatusLabel(targetStatus)}${reason ? ` (${reason})` : ''}.`,
+        source: 'Decision Center Governance'
       };
       setActivityLogs(prev => [newLog, ...prev]);
-      triggerToast(`Approved: "${action.actionTitle}"`);
+
+      triggerToast(`Action ${targetAction.id} transitioned to "${getStatusLabel(targetStatus)}".`);
+    } catch (err) {
+      triggerToast(`Transition Error: ${err.message}`);
     }
   };
 
-  // Reject a Decision
-  const handleRejectAction = (actionId) => {
-    setDecisions(prev => prev.map(item => {
-      if (item.id === actionId) {
-        return {
-          ...item,
-          status: 'Rejected'
-        };
-      }
-      return item;
-    }));
-    triggerToast('Action draft archived as rejected.');
+  const handleApproveAction = (actionId) => {
+    handleTransitionAction(actionId, ACTION_STATUS.APPROVED, { reviewer: currentReviewer });
   };
 
-  // Queue a new decision from Analysis Modal or Agent Recommendations
+  const handleRejectAction = (actionId, reason = 'Rejected by executive reviewer') => {
+    handleTransitionAction(actionId, ACTION_STATUS.REJECTED, { reason, reviewer: currentReviewer });
+  };
+
+  // Queue a new decision from Analysis Modal, Assistant, or Agent Recommendations with duplicate check
   const handleQueueDecision = (newAction) => {
-    setDecisions(prev => [newAction, ...prev]);
-    triggerToast(`Intervention queued for ${newAction.supplierCode} into Decisions pipeline.`);
+    // Check if an active matching action already exists
+    const existing = findExistingActiveAction(decisions, newAction);
+    if (existing) {
+      triggerToast(`Active action already exists: "${existing.actionTitle}" (${existing.id}, ${getStatusLabel(existing.status)}). Opening Decision Center.`);
+      setActiveTab('decisions');
+      return existing;
+    }
+
+    const assignedId = newAction.id && !decisions.some(d => d.id === newAction.id)
+      ? newAction.id
+      : generateStableActionId(decisions);
+
+    const targetStatus = newAction.status 
+      ? normalizeActionStatus(newAction.status) 
+      : ACTION_STATUS.PENDING_APPROVAL;
+
+    const stagedAction = {
+      ...newAction,
+      id: assignedId,
+      status: targetStatus,
+      requiresHumanApproval: true,
+      createdAt: new Date().toISOString(),
+      lastModifiedAt: new Date().toISOString(),
+      isDemoSeed: false
+    };
+
+    const updatedDecisions = [stagedAction, ...decisions];
+    setDecisions(updatedDecisions);
+    savePersistedActions(updatedDecisions);
+
+    // Staging audit event
+    const auditEvent = createAuditEvent({
+      actionId: assignedId,
+      actionTitle: stagedAction.actionTitle,
+      supplierCode: stagedAction.supplierCode,
+      eventType: targetStatus === ACTION_STATUS.PENDING_APPROVAL 
+        ? AUDIT_EVENT_TYPE.SUBMITTED_FOR_APPROVAL 
+        : AUDIT_EVENT_TYPE.ACTION_CREATED,
+      fromStatus: null,
+      toStatus: targetStatus,
+      actor: currentReviewer,
+      reason: stagedAction.whyRecommended || 'Staged from agent decision intelligence',
+      evidenceReferences: stagedAction.evidenceSummary
+    });
+
+    const updatedAudit = appendAuditEvent(auditLog, auditEvent);
+    setAuditLog(updatedAudit);
+    savePersistedAuditLog(updatedAudit);
+
+    triggerToast(`Intervention staged for ${stagedAction.supplierCode} (${assignedId}) as ${getStatusLabel(targetStatus)}.`);
+    return stagedAction;
+  };
+
+  const handleResetActions = () => {
+    const { actions: seedA, auditLog: seedAud } = resetToInitialSeeds();
+    setDecisions(seedA);
+    setAuditLog(seedAud);
+    triggerToast('Decision Center reset to initial demo seeds and audit log.');
   };
 
   // Inspect Supplier by Code helper (used by Activity or Decisions view)
@@ -133,7 +228,7 @@ export function App() {
       )
     : suppliers;
 
-  const pendingDecisionsCount = decisions.filter(d => d.status === 'Pending Approval').length;
+  const pendingDecisionsCount = decisions.filter(d => normalizeActionStatus(d.status) === ACTION_STATUS.PENDING_APPROVAL).length;
   const highRiskCount = suppliers.filter(s => s.riskLevel === 'HIGH').length;
 
   return (
@@ -258,9 +353,14 @@ export function App() {
               {activeTab === 'decisions' && (
                 <DecisionsView 
                   actions={decisions}
+                  auditLog={auditLog}
+                  currentReviewer={currentReviewer}
+                  onChangeReviewer={setCurrentReviewer}
+                  onTransitionAction={handleTransitionAction}
                   onApproveAction={handleApproveAction}
                   onRejectAction={handleRejectAction}
                   onInspectSupplierByCode={handleInspectSupplierByCode}
+                  onResetToDemoData={handleResetActions}
                 />
               )}
 

@@ -443,6 +443,221 @@ assert(emptyAns.content.length > 0, "Provides helpful prompt for empty query");
 const nullAns = processAssistantQuery(null, SUPPLIERS);
 assert(nullAns.intent === "EMPTY", "Gracefully handles null query");
 
+// =======================================================
+// SupplyShield AI — Phase 6 Action Lifecycle & Audit Verification
+// =======================================================
+console.log("\n=======================================================");
+console.log(" SupplyShield AI — Phase 6 Workflow & Audit Verification");
+console.log("=======================================================");
+
+const { 
+  ACTION_STATUS, 
+  normalizeActionStatus, 
+  canTransition, 
+  validateTransition, 
+  transitionAction, 
+  findExistingActiveAction, 
+  filterActions, 
+  sortActions, 
+  DEFAULT_REVIEWER 
+} = await import('../src/workflow/actionLifecycleService.js');
+
+const { 
+  AUDIT_EVENT_TYPE, 
+  createAuditEvent, 
+  appendAuditEvent, 
+  getAuditTrailForAction, 
+  filterAuditLog 
+} = await import('../src/workflow/auditService.js');
+
+const { 
+  generateStableActionId, 
+  validateActionRecord, 
+  validateAuditEventRecord, 
+  createInitialSeedActionsAndAudit 
+} = await import('../src/workflow/persistenceService.js');
+
+// 22. Action Lifecycle Valid Transitions
+console.log("\n[22. Action Lifecycle Valid Transitions Tests]");
+const mockDraft = {
+  id: "ACT-TEST-001",
+  supplierId: "SUP-001",
+  supplierCode: "Supplier A",
+  actionTitle: "Test Surcharge Dispute",
+  status: ACTION_STATUS.DRAFT,
+  requiresHumanApproval: true
+};
+
+assert(canTransition(ACTION_STATUS.DRAFT, ACTION_STATUS.PENDING_APPROVAL), "Permits DRAFT -> PENDING_APPROVAL");
+const pendingAct = transitionAction(mockDraft, ACTION_STATUS.PENDING_APPROVAL, { reviewer: "Sarah Chen" });
+assert(pendingAct.status === ACTION_STATUS.PENDING_APPROVAL, "Transitions action to PENDING_APPROVAL");
+
+assert(canTransition(ACTION_STATUS.PENDING_APPROVAL, ACTION_STATUS.APPROVED), "Permits PENDING_APPROVAL -> APPROVED");
+const approvedAct = transitionAction(pendingAct, ACTION_STATUS.APPROVED, { reviewer: "Sarah Chen (Director of Procurement)" });
+assert(approvedAct.status === ACTION_STATUS.APPROVED, "Transitions action to APPROVED");
+assert(approvedAct.approvedBy.includes("Sarah Chen"), "Records approving reviewer identity");
+
+assert(canTransition(ACTION_STATUS.APPROVED, ACTION_STATUS.IN_PROGRESS), "Permits APPROVED -> IN_PROGRESS");
+const inProgressAct = transitionAction(approvedAct, ACTION_STATUS.IN_PROGRESS, { reviewer: "Sarah Chen" });
+assert(inProgressAct.status === ACTION_STATUS.IN_PROGRESS, "Transitions action to IN_PROGRESS");
+
+assert(canTransition(ACTION_STATUS.IN_PROGRESS, ACTION_STATUS.COMPLETED), "Permits IN_PROGRESS -> COMPLETED");
+const completedAct = transitionAction(inProgressAct, ACTION_STATUS.COMPLETED, { reviewer: "Sarah Chen" });
+assert(completedAct.status === ACTION_STATUS.COMPLETED, "Transitions action to COMPLETED");
+
+// 23. Invalid Lifecycle Transitions & State Machine Enforcement
+console.log("\n[23. Invalid Transitions & State Machine Enforcement Tests]");
+assert(!canTransition(ACTION_STATUS.DRAFT, ACTION_STATUS.APPROVED), "Disallows DRAFT -> APPROVED (must be submitted first)");
+assert(!canTransition(ACTION_STATUS.DRAFT, ACTION_STATUS.IN_PROGRESS), "Disallows DRAFT -> IN_PROGRESS");
+assert(!canTransition(ACTION_STATUS.DRAFT, ACTION_STATUS.COMPLETED), "Disallows DRAFT -> COMPLETED");
+assert(!canTransition(ACTION_STATUS.PENDING_APPROVAL, ACTION_STATUS.COMPLETED), "Disallows PENDING_APPROVAL -> COMPLETED");
+
+// Terminal states disallow outgoing transitions
+assert(!canTransition(ACTION_STATUS.REJECTED, ACTION_STATUS.APPROVED), "Terminal: Disallows REJECTED -> APPROVED");
+assert(!canTransition(ACTION_STATUS.COMPLETED, ACTION_STATUS.IN_PROGRESS), "Terminal: Disallows COMPLETED -> IN_PROGRESS");
+assert(!canTransition(ACTION_STATUS.CANCELLED, ACTION_STATUS.DRAFT), "Terminal: Disallows CANCELLED -> DRAFT");
+
+// validateTransition rejects invalid transitions
+const invalidRes = validateTransition(mockDraft, ACTION_STATUS.COMPLETED);
+assert(invalidRes.valid === false, "validateTransition returns false for invalid transition");
+
+// 24. Mandatory Rejection & Cancellation Reasons
+console.log("\n[24. Mandatory Rejection & Cancellation Reasons Tests]");
+const testPending = { ...pendingAct };
+
+// Empty rejection reason fails validation
+const rejectNoReason = validateTransition(testPending, ACTION_STATUS.REJECTED, { reason: "" });
+assert(rejectNoReason.valid === false, "Rejection with empty reason fails validation");
+
+// Valid rejection reason succeeds
+const rejectValid = validateTransition(testPending, ACTION_STATUS.REJECTED, { reason: "Alternative vendor already certified" });
+assert(rejectValid.valid === true, "Rejection with documented reason passes validation");
+
+const rejectedAct = transitionAction(testPending, ACTION_STATUS.REJECTED, { reason: "Alternative vendor already certified", reviewer: "Sarah Chen" });
+assert(rejectedAct.status === ACTION_STATUS.REJECTED, "Transitions to REJECTED");
+assert(rejectedAct.rejectionReason === "Alternative vendor already certified", "Records rejection reason");
+
+// Empty cancellation reason fails validation
+const cancelNoReason = validateTransition(approvedAct, ACTION_STATUS.CANCELLED, { reason: "   " });
+assert(cancelNoReason.valid === false, "Cancellation with empty reason fails validation");
+
+const cancelledAct = transitionAction(approvedAct, ACTION_STATUS.CANCELLED, { reason: "Budget deferred to Q3", reviewer: "Marcus Vance" });
+assert(cancelledAct.status === ACTION_STATUS.CANCELLED, "Transitions to CANCELLED");
+assert(cancelledAct.cancellationReason === "Budget deferred to Q3", "Records cancellation reason");
+
+// 25. Audit Event Creation & Append-Only Immutability
+console.log("\n[25. Audit Event Creation & Append-Only Immutability Tests]");
+const testAuditEvent = createAuditEvent({
+  actionId: "ACT-TEST-001",
+  actionTitle: "Issue Immediate Dispute",
+  supplierCode: "Supplier A",
+  eventType: AUDIT_EVENT_TYPE.ACTION_APPROVED,
+  fromStatus: ACTION_STATUS.PENDING_APPROVAL,
+  toStatus: ACTION_STATUS.APPROVED,
+  actor: "Sarah Chen (Director of Procurement)",
+  reason: "Audit verified $74,000 price leakage"
+});
+
+assert(testAuditEvent.id.startsWith("AUD-"), "Generates unique audit ID with AUD- prefix");
+assert(testAuditEvent.eventType === AUDIT_EVENT_TYPE.ACTION_APPROVED, "Stamps correct event type");
+assert(testAuditEvent.isLocalDemoLog === true, "Flags event as local demonstration log");
+
+// Append-only behavior
+let testLog = [];
+testLog = appendAuditEvent(testLog, testAuditEvent);
+assert(testLog.length === 1, "Appends event to audit log array");
+
+// Frozen immutability check
+let throwsOnMutation = false;
+try {
+  testLog[0].actor = "Tampered Actor";
+} catch {
+  throwsOnMutation = true;
+}
+assert(throwsOnMutation || testLog[0].actor === "Sarah Chen (Director of Procurement)", "Frozen audit record guarantees immutability");
+
+// Action audit trail extraction
+const auditTrail = getAuditTrailForAction(testLog, "ACT-TEST-001");
+assert(auditTrail.length === 1, "getAuditTrailForAction filters correct events for actionId");
+
+const filteredEvents = filterAuditLog(testLog, { eventType: AUDIT_EVENT_TYPE.ACTION_APPROVED });
+assert(filteredEvents.length === 1, "filterAuditLog filters by eventType correctly");
+
+// 26. Stable Action IDs & Duplicate Recommendation Detection
+console.log("\n[26. Stable Action IDs & Duplicate Recommendation Detection Tests]");
+const existingList = [
+  { id: "ACT-2026-001", supplierId: "SUP-001", actionTitle: "Dispute Price", status: ACTION_STATUS.PENDING_APPROVAL },
+  { id: "ACT-2026-002", supplierId: "SUP-003", actionTitle: "Divert Seal Buffer", status: ACTION_STATUS.APPROVED }
+];
+
+const nextId = generateStableActionId(existingList);
+assert(nextId === "ACT-2026-003", `Generates next sequential stable ID (got ${nextId}, expected ACT-2026-003)`);
+
+// Duplicate detection
+const dupCandidate = {
+  supplierId: "SUP-001",
+  actionTitle: "Dispute Price"
+};
+const duplicateFound = findExistingActiveAction(existingList, dupCandidate);
+assert(duplicateFound !== null, "Detects duplicate active recommendation for same supplier and title");
+assert(duplicateFound.id === "ACT-2026-001", "Identifies exact duplicate action ID");
+
+// Non-duplicate candidate
+const uniqueCandidate = {
+  supplierId: "SUP-002",
+  actionTitle: "Brand New Supplier Action"
+};
+const noDuplicate = findExistingActiveAction(existingList, uniqueCandidate);
+assert(noDuplicate === null, "Returns null when no matching active action exists");
+
+// 27. Persistence Validation & Recovery
+console.log("\n[27. Persistence Validation & Recovery Tests]");
+const validRecord = validateActionRecord({
+  id: "ACT-RAW-1",
+  actionTitle: "Raw Action",
+  status: "Pending Approval"
+});
+assert(validRecord !== null, "validateActionRecord validates valid record");
+assert(validRecord.status === ACTION_STATUS.PENDING_APPROVAL, "Normalizes status to ACTION_STATUS.PENDING_APPROVAL");
+assert(normalizeActionStatus("Pending Approval") === ACTION_STATUS.PENDING_APPROVAL, "Normalizes legacy 'Pending Approval' string");
+
+const validAud = validateAuditEventRecord(testAuditEvent);
+assert(validAud !== null, "validateAuditEventRecord validates event record");
+
+const invalidRecord = validateActionRecord({ invalid: true });
+assert(invalidRecord === null, "validateActionRecord returns null for malformed object");
+
+const { seedActions, seedAudit } = createInitialSeedActionsAndAudit();
+assert(seedActions.length >= 4, "createInitialSeedActionsAndAudit generates initial seed actions");
+assert(seedAudit.length >= 4, "createInitialSeedActionsAndAudit generates corresponding seed audit trail");
+
+// 28. Human Approval Enforcement & Governance Guarantees
+console.log("\n[28. Human Approval Enforcement & Governance Guarantees Tests]");
+assert(DEFAULT_REVIEWER.includes("Sarah Chen"), "DEFAULT_REVIEWER contains Sarah Chen");
+// Requires non-empty reviewer for approval
+const approveNoReviewer = validateTransition(testPending, ACTION_STATUS.APPROVED, { reviewer: "" });
+assert(approveNoReviewer.valid === false, "Approval fails if reviewer identity is missing");
+
+// Agent dossier recommendations enforce requiresHumanApproval
+const dossierForGov = orchestrateSupplierDecision(supplierA);
+const recommendations = dossierForGov.procurementRecommendations?.recommendations || [];
+assert(recommendations.every(r => r.requiresHumanApproval === true), "All agent recommendations enforce requiresHumanApproval = true");
+
+// 29. Filtering and Sorting Logic Tests
+console.log("\n[29. Filtering and Sorting Logic Tests]");
+const filterSample = [
+  { id: "ACT-1", status: ACTION_STATUS.PENDING_APPROVAL, urgency: "CRITICAL", supplierCode: "Supplier A", actionTitle: "Dispute" },
+  { id: "ACT-2", status: ACTION_STATUS.APPROVED, urgency: "LOW", supplierCode: "Supplier B", actionTitle: "Rebate" },
+  { id: "ACT-3", status: ACTION_STATUS.PENDING_APPROVAL, urgency: "HIGH", supplierCode: "Supplier C", actionTitle: "Buffer" }
+];
+
+const pendingFiltered = filterActions(filterSample, { status: ACTION_STATUS.PENDING_APPROVAL });
+assert(pendingFiltered.length === 2, "filterActions filters by status correctly");
+
+const sortedByUrgency = sortActions(filterSample, 'urgency');
+assert(sortedByUrgency[0].urgency === "CRITICAL", "sortActions places CRITICAL urgency first");
+assert(sortedByUrgency[sortedByUrgency.length - 1].urgency === "LOW", "sortActions places LOW urgency last");
+
 console.log("\n=======================================================");
 console.log(` Test Execution Summary: ${passedTests} Passed, ${failedTests} Failed`);
 console.log("=======================================================\n");
@@ -452,3 +667,4 @@ if (failedTests > 0) {
 } else {
   process.exit(0);
 }
+

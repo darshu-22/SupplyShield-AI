@@ -452,6 +452,7 @@ export function AssistantView({
                               whyRecommended: msg.recommendations[0],
                               suggestedNextStep: 'Executive review requested via AI Assistant'
                             });
+                            if (onNavigateTab) onNavigateTab('decisions');
                           }}
                           className="btn btn-primary btn-sm"
                           style={{ fontSize: '0.7rem', padding: '2px 8px' }}
