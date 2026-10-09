@@ -312,6 +312,137 @@ assert(portfolioOrch.totalSuppliersAnalyzed === SUPPLIERS.length, `Portfolio orc
 assert(portfolioOrch.portfolioRankedDecisions.length >= SUPPLIERS.length, "Portfolio orchestrator builds consolidated ranked decision queue");
 assert(portfolioOrch.portfolioRankedDecisions[0]?.portfolioRank === 1, "Portfolio ranked decisions start at Rank 1");
 
+// =======================================================
+// Phase 4: AI Procurement Assistant & What-If Tests
+// =======================================================
+console.log("\n=======================================================");
+console.log(" SupplyShield AI — Phase 4 Assistant & What-If Verification");
+console.log("=======================================================\n");
+
+const { routeUserIntent, extractSupplierFromQuery, extractScenarioParameters } = await import('../src/assistant/intentRouter.js');
+const { executeWhatIfScenario } = await import('../src/assistant/scenarioService.js');
+const { processAssistantQuery } = await import('../src/assistant/assistantService.js');
+
+// 15. Supplier Name & Entity Recognition Tests
+console.log("[15. Supplier Name & Entity Recognition Tests]");
+const suppEntity1 = extractSupplierFromQuery("What is happening with Apex Precision Castings?");
+assert(suppEntity1?.id === "SUP-001" && suppEntity1?.code === "Supplier A", "Recognizes 'Apex Precision Castings' as Supplier A (SUP-001)");
+
+const suppEntity2 = extractSupplierFromQuery("Check microcontrollers from Vanguard");
+assert(suppEntity2?.id === "SUP-002", "Recognizes 'Vanguard' as Supplier B (SUP-002)");
+
+const suppEntity3 = extractSupplierFromQuery("Tell me about seals from HydroTech");
+assert(suppEntity3?.id === "SUP-003", "Recognizes 'HydroTech' and 'seals' as Supplier C (SUP-003)");
+
+const suppEntity4 = extractSupplierFromQuery("What is the lead time for SUP-006?");
+assert(suppEntity4?.id === "SUP-006", "Recognizes exact ID 'SUP-006' as Supplier F");
+
+const suppEntityNone = extractSupplierFromQuery("What is the general inflation rate?");
+assert(suppEntityNone === null, "Returns null when no supplier entity is present");
+
+// 16. Every Supported Intent Category Test
+console.log("\n[16. Every Supported Intent Category Test]");
+const intentRanking = routeUserIntent("Which supplier is the riskiest and why?");
+assert(intentRanking.intent === "RISK_RANKING", "Classifies intent: RISK_RANKING");
+
+const intentSuppExplain = routeUserIntent("Why is Apex Castings considered high risk?");
+assert(intentSuppExplain.intent === "SUPPLIER_EXPLANATION", "Classifies intent: SUPPLIER_EXPLANATION");
+
+const intentQuality = routeUserIntent("What are the quality defect rates across suppliers?");
+assert(intentQuality.intent === "QUALITY_INSPECTION", "Classifies intent: QUALITY_INSPECTION");
+
+const intentPrice = routeUserIntent("Which supplier has the largest calculated price variance?");
+assert(intentPrice.intent === "PRICE_VARIANCE", "Classifies intent: PRICE_VARIANCE");
+
+const intentDelivery = routeUserIntent("Who has late deliveries and shipment delays?");
+assert(intentDelivery.intent === "DELIVERY_PERFORMANCE", "Classifies intent: DELIVERY_PERFORMANCE");
+
+const intentCompliance = routeUserIntent("Which certificates are expiring soon?");
+assert(intentCompliance.intent === "COMPLIANCE_EXPIRY", "Classifies intent: COMPLIANCE_EXPIRY");
+
+const intentInventory = routeUserIntent("What is the inventory coverage and lead time deficit?");
+assert(intentInventory.intent === "INVENTORY_COVERAGE", "Classifies intent: INVENTORY_COVERAGE");
+
+const intentActions = routeUserIntent("What are the top three procurement actions requiring attention?");
+assert(intentActions.intent === "RECOMMENDED_ACTIONS", "Classifies intent: RECOMMENDED_ACTIONS");
+
+const intentCrossSignal = routeUserIntent("Explain cross-signal compound risks for Supplier A");
+assert(intentCrossSignal.intent === "CROSS_SIGNAL_EXPLANATION", "Classifies intent: CROSS_SIGNAL_EXPLANATION");
+
+const intentWhatIf = routeUserIntent("What happens if we increase safety stock by 30 days for Supplier A?");
+assert(intentWhatIf.intent === "WHAT_IF_SCENARIO", "Classifies intent: WHAT_IF_SCENARIO");
+
+const scenarioParams = extractScenarioParameters("What happens if we increase safety stock by 30 days and reduce rejection rate by 3% for Supplier A?");
+assert(scenarioParams.stockCoverageDeltaDays === 30, "Extracts stock coverage delta (+30 days) from query");
+assert(scenarioParams.rejectionRateDeltaPct === -3, "Extracts rejection rate delta (-3%) from query");
+
+// 17. Ambiguous Questions & Clarification Behavior Tests
+console.log("\n[17. Ambiguous Questions & Clarification Behavior Tests]");
+const intentAmbiguous = routeUserIntent("What is the rejection rate?");
+assert(intentAmbiguous.intent === "AMBIGUOUS_CLARIFICATION", "Classifies ambiguous query as AMBIGUOUS_CLARIFICATION");
+
+const respAmbiguous = processAssistantQuery("What is the rejection rate?", SUPPLIERS);
+assert(respAmbiguous.intent === "AMBIGUOUS_CLARIFICATION", "Assistant generates clarification response for ambiguous metric query");
+assert(respAmbiguous.content.includes("Could you please specify"), "Clarification politely requests supplier specification");
+assert(respAmbiguous.suggestedFollowUps.length >= 3, "Provides helpful follow-up question suggestions");
+
+// 18. Evidence Attribution in Assistant Answers Tests
+console.log("\n[18. Evidence Attribution in Assistant Answers Tests]");
+const priceAns = processAssistantQuery("How much overpayment was calculated for Supplier A?", SUPPLIERS);
+assert(priceAns.evidence !== null, "Assistant includes structured evidence citations in answer");
+assert(priceAns.evidence?.poNumbers?.length >= 2, "Cites specific purchase order numbers for Supplier A");
+assert(priceAns.observedFacts?.some(f => f.includes("74,000")), "Cites exact verified $74,000 overpayment in observed facts");
+
+const qualAns = processAssistantQuery("What quality defects were found for Supplier A?", SUPPLIERS);
+assert(qualAns.evidence?.lotNumbers?.length >= 2, "Cites specific inspection lot numbers for Supplier A");
+assert(qualAns.observedFacts?.some(f => f.includes("9.2%")), "Cites verified 9.2% latest lot defect rate");
+
+// 19. What-If Scenario Engine & Non-Mutation Tests
+console.log("\n[19. What-If Scenario Engine & Non-Mutation Tests]");
+const initialScore = supplierA.riskScore;
+const initialBreakdown = JSON.stringify(supplierA.scoreBreakdown);
+
+const simOutcome = executeWhatIfScenario(supplierA, {
+  stockCoverageDeltaDays: 30,
+  rejectionRateDeltaPct: -3.0,
+  resolvePriceVariance: true,
+  activateDualSource: true
+});
+
+assert(simOutcome.success === true, "What-If scenario executes successfully");
+assert(simOutcome.isHypothetical === true, "Explicitly flags outcome as isHypothetical = true");
+assert(simOutcome.hypotheticalScore < initialScore, "Hypothetical mitigation significantly reduces risk score");
+assert(simOutcome.scoreDelta < -15, "Score delta reflects comprehensive multi-vector relief");
+assert(simOutcome.changedMetrics.length >= 3, "Tracks specific changed metrics");
+assert(simOutcome.unchangedMetrics.length >= 1, "Tracks specific unchanged metrics");
+
+// Non-mutation assertion
+assert(supplierA.riskScore === initialScore, "STRICT NON-MUTATION: Original supplierA.riskScore remains 100% untouched");
+assert(JSON.stringify(supplierA.scoreBreakdown) === initialBreakdown, "STRICT NON-MUTATION: Original score breakdown remains 100% untouched");
+
+// Unsupported scenario / missing supplier test
+const simMissing = executeWhatIfScenario(null, { stockCoverageDeltaDays: 10 });
+assert(simMissing.success === false, "Handles missing supplier in what-if engine gracefully");
+
+// 20. Deterministic Output & Reproducibility Tests
+console.log("\n[20. Deterministic Output & Reproducibility Tests]");
+const query1 = "Which supplier is the riskiest and why?";
+const ans1 = processAssistantQuery(query1, SUPPLIERS);
+const ans2 = processAssistantQuery(query1, SUPPLIERS);
+
+assert(ans1.intent === ans2.intent, "Identical intent produced across repeated queries");
+assert(ans1.content === ans2.content, "Identical content generated deterministically");
+assert(JSON.stringify(ans1.observedFacts) === JSON.stringify(ans2.observedFacts), "Identical observed facts generated deterministically");
+
+// 21. Empty / Missing Input & Graceful Handling Tests
+console.log("\n[21. Graceful Error Handling Tests]");
+const emptyAns = processAssistantQuery("", SUPPLIERS);
+assert(emptyAns.intent === "EMPTY", "Gracefully handles empty query string");
+assert(emptyAns.content.length > 0, "Provides helpful prompt for empty query");
+
+const nullAns = processAssistantQuery(null, SUPPLIERS);
+assert(nullAns.intent === "EMPTY", "Gracefully handles null query");
+
 console.log("\n=======================================================");
 console.log(` Test Execution Summary: ${passedTests} Passed, ${failedTests} Failed`);
 console.log("=======================================================\n");

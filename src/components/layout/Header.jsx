@@ -40,6 +40,8 @@ export function Header({
     switch (activeTab) {
       case 'overview':
         return { title: 'Procurement Risk Intelligence', subtitle: 'Calculated multi-vector supplier exposure, price variances, and stockout hazards' };
+      case 'assistant':
+        return { title: 'AI Procurement Assistant', subtitle: 'Interactive natural language inquiry and deterministic what-if scenario intelligence' };
       case 'suppliers':
         return { title: 'Supplier Master Directory', subtitle: 'Audited vendor catalog with linked purchase orders and inspection lots' };
       case 'risk':

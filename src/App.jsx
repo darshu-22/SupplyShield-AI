@@ -14,6 +14,7 @@ import { EvidenceExplorerModal } from './components/evidence/EvidenceExplorerMod
 import { RiskSimulatorModal } from './components/simulator/RiskSimulatorModal';
 import { MethodologyModal } from './components/methodology/MethodologyModal';
 import { AgentInvestigationReportModal } from './components/agentic/AgentInvestigationReportModal';
+import { AssistantView } from './components/assistant/AssistantView';
 import { LoadingState, ErrorBanner } from './components/common/StateViews';
 
 export function App() {
@@ -219,6 +220,15 @@ export function App() {
                   currentRiskFilter={currentRiskFilter}
                   onSelectRiskFilter={setCurrentRiskFilter}
                   pendingActionsCount={pendingDecisionsCount}
+                  onNavigateTab={setActiveTab}
+                />
+              )}
+
+              {activeTab === 'assistant' && (
+                <AssistantView 
+                  suppliers={displayedSuppliers}
+                  onInspectSupplier={setInspectingSupplier}
+                  onQueueDecision={handleQueueDecision}
                   onNavigateTab={setActiveTab}
                 />
               )}

@@ -7,7 +7,8 @@ import {
   CheckSquare, 
   Activity, 
   X, 
-  Database 
+  Database,
+  Bot
 } from 'lucide-react';
 
 export function Sidebar({ 
@@ -25,6 +26,12 @@ export function Sidebar({
       label: 'Overview',
       icon: LayoutDashboard,
       badge: null
+    },
+    {
+      id: 'assistant',
+      label: 'AI Assistant',
+      icon: Bot,
+      badge: 'Agentic'
     },
     {
       id: 'suppliers',
