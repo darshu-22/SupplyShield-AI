@@ -1,10 +1,12 @@
 # SupplyShield AI — Agentic Supplier Risk Intelligence
 
-> **Phase 6: Procurement Action, Approval & Audit Workflow**
+> **Phase 5 & 6: Procurement Approval Workflow & Secure Groq AI Integration**
 
 SupplyShield AI is an enterprise supplier intelligence platform designed for procurement directors and supply chain leaders. It monitors supply chain vulnerabilities across quality inspection trends, unauthorized price variance leakage, compliance accreditation cliffs, and factory stockout hazards.
 
-In **Phase 6**, the platform delivers a complete, explainable **Human-in-the-Loop Procurement Action, Approval & Audit Workflow**. It enforces a strict finite-state machine (FSM) across action lifecycles, provides an upgraded Decision Center with real-time KPI status metrics, mandates executive sign-off with documented justifications, and records an append-only, tamper-proof governance audit trail with local persistence. All operations run 100% locally and deterministically.
+In **Phase 5 & 6**, the platform delivers:
+1. **Secure Groq AI Integration (Phase 5)**: Natural language supplier intelligence powered by Groq's official OpenAI-compatible API (`llama-3.3-70b-versatile`) with free-only safety controls (`ENABLE_GROQ=false` default), server-only credential security, controlled prompt grounding in relational transaction records, and instant fallback to the deterministic engine.
+2. **Human-in-the-Loop Procurement Action & Audit Workflow (Phase 6)**: Strict finite-state machine (FSM) action lifecycles, an upgraded Decision Center with real-time KPI metrics, mandatory documented justifications, and an append-only tamper-proof governance audit trail.
 
 ---
 
@@ -237,7 +239,124 @@ Assistant responses featuring recommendations include a **"Stage Action Draft"**
 
 ---
 
-## 8. Procurement Action, Approval & Audit Workflow (Phase 6)
+## 8. Secure Groq AI Integration (Phase 5)
+
+Phase 5 introduces optional natural language intelligence powered by the official **Groq Cloud API** (`https://api.groq.com/openai/v1/chat/completions`). It enables the assistant to synthesize complex supplier evidence, translate multi-factor hazards into executive briefings, compare supplier risk profiles, and explain proposed mitigation trade-offs—while strictly maintaining the authoritative deterministic risk engine as the source of truth.
+
+```
+                           ┌──────────────────────────────────────────────┐
+                           │      Conversational Procurement Query        │
+                           │   ("Why is Supplier A classified high risk?")│
+                           └──────────────────────┬───────────────────────┘
+                                                  │
+                                                  ▼
+                           ┌──────────────────────────────────────────────┐
+                           │   Frontend Assistant (AssistantView.jsx)     │
+                           │   • Mode Switcher: Deterministic vs Groq AI  │
+                           │   • Live Status Indicator & Fallback Badge   │
+                           │   • User-Driven Manual Retry Controls        │
+                           └──────────────────────┬───────────────────────┘
+                                                  │ POST /api/assistant/chat
+                                                  ▼
+      ┌────────────────────────────────────────────────────────────────────────┐
+      │ Secure Express Backend Service (server/app.js & assistantRoutes.js)   │
+      │   • Sliding Window IP Rate Limiter (server/middleware/rateLimiter.js)  │
+      │   • Payload Sizing & Anti-Injection (middleware/requestValidator.js)  │
+      │   • Free-Only Safety Gate: ENABLE_GROQ=false (Default Safe State)      │
+      └───────────────────────────────────┬────────────────────────────────────┘
+                                          │
+                     ┌────────────────────┴────────────────────┐
+                     │ When ENABLE_GROQ=false                  │ When ENABLE_GROQ=true
+                     ▼                                         ▼
+┌─────────────────────────────────────────┐ ┌─────────────────────────────────────────┐
+│     Authoritative Fallback Engine       │ │      Controlled Prompt Assembler        │
+│   (src/assistant/assistantService.js)   │ │    (server/services/promptBuilder.js)   │
+│ • 100% Offline, Zero Cloud API Latency  │ │ • Injects exact deterministic scores    │
+│ • Zero External API Fees                │ │ • Injects verified POs & QA Lots        │
+│ • Immediate Deterministic Resolution    │ │ • Injects Agent Orchestrator findings   │
+└─────────────────────────────────────────┘ └────────────────────┬────────────────────┘
+                                                                 │
+                                                                 ▼
+                                            ┌─────────────────────────────────────────┐
+                                            │      Groq API Client (groqClient.js)    │
+                                            │ • POST https://api.groq.com/openai/v1/  │
+                                            │ • Model: llama-3.3-70b-versatile (Free) │
+                                            │ • Secret Key strictly on backend        │
+                                            │ • AbortController Timeout Protection    │
+                                            └─────────────────────────────────────────┘
+```
+
+### A. Free-Only Safety & Cost Protection Guarantees
+- **Disabled by Default**: External cloud AI calls are strictly disabled (`ENABLE_GROQ=false`) by default to prevent unintended API usage.
+- **Zero Live Calls During Testing or Builds**: Automated verification suites use 100% mocked HTTP responses via dependency injection; no tokens or credits are ever consumed during test runs.
+- **No Silent Fallbacks to Paid Providers**: If Groq is unavailable, rate-limited, or disabled, the application never attempts other providers; it transparently falls back to the local deterministic engine.
+- **Zero Runaway Retry Loops**: No automated retry loops. Failed or rate-limited requests present friendly status notifications and give the procurement user explicit manual retry buttons.
+
+### B. Server-Only Key Security Architecture
+- **Zero Frontend Leakage**: The `GROQ_API_KEY` is read strictly on the Node.js backend via `process.env.GROQ_API_KEY`.
+- **Bundle Isolation**: Never prefixed with `VITE_*`. Automated tests assert that client files and production bundles contain zero references to server secrets.
+- **Zero Log Exposure**: Authorization headers and secret tokens are never written to server logs, error dumps, or client responses.
+- **Git Ignored**: `.env` and all credential patterns are strictly excluded in `.gitignore`. A `.env.example` file contains placeholders only.
+
+### C. Grounding & Authoritative Risk Engine Rule
+- **Calculations are Authoritative**: All numerical risk scores ($0\text{--}100$), financial price variances ($\$74,000$), defect percentages ($9.2\%$), and lead-time gap calculations ($-87\text{ days}$) remain deterministically computed by the Phase 2 risk engine and Phase 3 agents.
+- **Zero Hallucination Mandate**: Groq is instructed to explain and interpret these calculations, never recalculate or invent numbers.
+- **Explicit Missing Data Handling**: If an inspection history or contract record is not in the system, the model must explicitly state that the data is not on file rather than guessing.
+- **Human Governance Uncompromised**: Groq has zero authority to approve, reject, start, complete, or cancel procurement actions. All lifecycle transitions remain gated by human executive sign-off.
+
+### D. Supported Supplier Intelligence Inquiries
+1. **Root-Cause Risk Explanation**: *"Why is Supplier A classified as high risk?"* (Explains 9.2% defect spike and +7.4% unapproved price variance).
+2. **Evidence Synthesis**: *"Which evidence supports this risk assessment?"* (Cites specific purchase orders like `PO-2026-0810` and inspection lots like `LOT-QA-912`).
+3. **Failure Impact Analysis**: *"What could happen if Supplier A fails?"* (Details assembly line stoppage within 25 days due to depleted buffer and sole-source dependency).
+4. **Prioritization Guidance**: *"Which suppliers should procurement investigate first?"* (Reviews portfolio ranking and highlights immediate intervention targets).
+5. **Agent Findings Translation**: *"Explain the existing agents' findings in simple language."* (Translates technical NDT porosity and commercial leakage into clear operational summaries).
+6. **Multi-Vendor Risk Comparison**: *"Compare the deterministic risk findings for Supplier A and Supplier C."* (Evaluates quality/price exposure vs delivery/lead-time exposure).
+7. **Mitigation Trade-Offs**: *"Explain a proposed mitigation and its trade-offs."* (Analyzes safety stock expansion vs inventory holding cost).
+
+### E. Backend Configuration & Setup
+
+1. **Environment Configuration**:
+   ```bash
+   # Copy example configuration template
+   cp .env.example .env
+   ```
+
+2. **Environment Variables**:
+   | Variable | Default | Purpose |
+   |---|---|---|
+   | `PORT` | `3001` | Express backend HTTP server port |
+   | `ALLOWED_ORIGIN` | `http://localhost:5173` | Allowed frontend origin for CORS |
+   | `ENABLE_GROQ` | `false` | Master safety switch. Set to `true` only when intentionally using Groq |
+   | `GROQ_API_KEY` | *(empty)* | Official Groq API key from `https://console.groq.com/keys` (kept on server only) |
+   | `GROQ_MODEL` | `llama-3.3-70b-versatile` | Free-tier model identifier (`llama-3.3-70b-versatile`, `llama-3.1-8b-instant`) |
+   | `GROQ_BASE_URL` | `https://api.groq.com/openai/v1` | Official Groq OpenAI-compatible base URL |
+   | `REQUEST_TIMEOUT_MS`| `20000` | AbortController network timeout bound (20 seconds) |
+   | `RATE_LIMIT_MAX_REQUESTS`| `20` | Max requests per minute per IP |
+
+3. **Running in Free-Only Mode (Default)**:
+   ```bash
+   # Terminal 1: Start backend server (Groq disabled by default)
+   npm run server
+
+   # Terminal 2: Start frontend development server
+   npm run dev
+   ```
+   *In this mode, all assistant inquiries run instantly via the local deterministic engine with zero API charges.*
+
+4. **Enabling Groq Manually**:
+   Create a free account and generate an API key at [console.groq.com/keys](https://console.groq.com/keys):
+   ```bash
+   # Edit .env
+   ENABLE_GROQ=true
+   GROQ_API_KEY=gsk_your_actual_key_here
+   GROQ_MODEL=llama-3.3-70b-versatile
+   GROQ_BASE_URL=https://api.groq.com/openai/v1
+   ```
+   Restart `npm run server`. The frontend Assistant status pill will display: **Groq AI Active (llama-3.3-70b-versatile)**.
+
+---
+
+## 9. Procurement Action, Approval & Audit Workflow (Phase 6)
 
 Phase 6 implements a comprehensive, human-in-the-loop governance system for the procurement action lifecycle. It bridges agentic intelligence and conversational discovery directly into executive sign-off, work tracking, and append-only audit verification.
 
@@ -328,14 +447,14 @@ The action lifecycle strictly enforces valid transitions:
 
 ---
 
-## 9. Automated Test Suite (`tests/run-tests.js`)
+## 10. Automated Test Suite (`tests/run-tests.js`)
 
 Run the test suite with:
 ```bash
 npm test
 ```
 
-The test runner executes **165 automated unit tests** across Phases 2, 3, 4, and 6:
+The test runner executes **309 automated unit tests** across Phases 2, 3, 4, 6, and 5:
 
 ```
 =======================================================
@@ -375,102 +494,126 @@ The test runner executes **165 automated unit tests** across Phases 2, 3, 4, and
 =======================================================
  SupplyShield AI — Phase 6 Workflow & Audit Verification
 =======================================================
-[22. Action Lifecycle Valid Transitions Tests]
-  ✓ PASS: Permits DRAFT -> PENDING_APPROVAL
-  ✓ PASS: Transitions action to PENDING_APPROVAL
-  ✓ PASS: Permits PENDING_APPROVAL -> APPROVED
-  ✓ PASS: Transitions action to APPROVED
-  ✓ PASS: Records approving reviewer identity
-  ✓ PASS: Permits APPROVED -> IN_PROGRESS
-  ✓ PASS: Transitions action to IN_PROGRESS
-  ✓ PASS: Permits IN_PROGRESS -> COMPLETED
-  ✓ PASS: Transitions action to COMPLETED
-
-[23. Invalid Transitions & State Machine Enforcement Tests]
-  ✓ PASS: Disallows DRAFT -> APPROVED (must be submitted first)
-  ✓ PASS: Disallows DRAFT -> IN_PROGRESS
-  ✓ PASS: Disallows DRAFT -> COMPLETED
-  ✓ PASS: Disallows PENDING_APPROVAL -> COMPLETED
-  ✓ PASS: Terminal: Disallows REJECTED -> APPROVED
-  ✓ PASS: Terminal: Disallows COMPLETED -> IN_PROGRESS
-  ✓ PASS: Terminal: Disallows CANCELLED -> DRAFT
-  ✓ PASS: validateTransition returns false for invalid transition
-
-[24. Mandatory Rejection & Cancellation Reasons Tests]
-  ✓ PASS: Rejection with empty reason fails validation
-  ✓ PASS: Rejection with documented reason passes validation
-  ✓ PASS: Transitions to REJECTED
-  ✓ PASS: Records rejection reason
-  ✓ PASS: Cancellation with empty reason fails validation
-  ✓ PASS: Transitions to CANCELLED
-  ✓ PASS: Records cancellation reason
-
-[25. Audit Event Creation & Append-Only Immutability Tests]
-  ✓ PASS: Generates unique audit ID with AUD- prefix
-  ✓ PASS: Stamps correct event type
-  ✓ PASS: Flags event as local demonstration log
-  ✓ PASS: Appends event to audit log array
-  ✓ PASS: Frozen audit record guarantees immutability
-  ✓ PASS: getAuditTrailForAction filters correct events for actionId
-  ✓ PASS: filterAuditLog filters by eventType correctly
-
-[26. Stable Action IDs & Duplicate Recommendation Detection Tests]
-  ✓ PASS: Generates next sequential stable ID (ACT-2026-003)
-  ✓ PASS: Detects duplicate active recommendation for same supplier and title
-  ✓ PASS: Identifies exact duplicate action ID
-  ✓ PASS: Returns null when no matching active action exists
-
-[27. Persistence Validation & Recovery Tests]
-  ✓ PASS: validateActionRecord validates valid record
-  ✓ PASS: Normalizes status to ACTION_STATUS.PENDING_APPROVAL
-  ✓ PASS: Normalizes legacy 'Pending Approval' string
-  ✓ PASS: validateAuditEventRecord validates event record
-  ✓ PASS: validateActionRecord returns null for malformed object
-  ✓ PASS: createInitialSeedActionsAndAudit generates initial seed actions
-  ✓ PASS: createInitialSeedActionsAndAudit generates corresponding seed audit trail
-
-[28. Human Approval Enforcement & Governance Guarantees Tests]
-  ✓ PASS: DEFAULT_REVIEWER contains Sarah Chen
-  ✓ PASS: Approval fails if reviewer identity is missing
-  ✓ PASS: All agent recommendations enforce requiresHumanApproval = true
-
-[29. Filtering and Sorting Logic Tests]
-  ✓ PASS: filterActions filters by status correctly
-  ✓ PASS: sortActions places CRITICAL urgency first
-  ✓ PASS: sortActions places LOW urgency last
+[22. Action Lifecycle Valid Transitions Tests] (8 tests)
+[23. Invalid Transitions & State Machine Enforcement Tests] (8 tests)
+[24. Mandatory Rejection & Cancellation Reasons Tests] (5 tests)
+[25. Audit Event Creation & Append-Only Immutability Tests] (7 tests)
+[26. Stable Action IDs & Duplicate Recommendation Detection Tests] (4 tests)
+[27. Persistence Validation & Recovery Tests] (6 tests)
+[28. Human Approval Enforcement & Governance Guarantees Tests] (3 tests)
+[29. Filtering and Sorting Logic Tests] (3 tests)
 
 =======================================================
- Test Execution Summary: 165 Passed, 0 Failed
+ SupplyShield AI — Phase 5 Secure Grok AI Verification
+=======================================================
+[30. Grok AI Configuration & Default Safe State] (10 tests)
+  ✓ PASS: Grok is disabled by default (ENABLE_GROK=false)
+  ✓ PASS: isGrokEnabled() returns false by default
+  ✓ PASS: isGrokConfigured() returns false by default
+  ✓ PASS: getClientSafeStatus reports enabled: false
+  ✓ PASS: getClientSafeStatus never exposes XAI_API_KEY
+  ✓ PASS: Custom config with ENABLE_GROK=false remains disabled even when key provided
+  ✓ PASS: Defaults to grok-2-latest model
+
+[31. Request Validation & Payload Constraints] (8 tests)
+  ✓ PASS: Rejects null body with 400
+  ✓ PASS: Rejects missing message with 400
+  ✓ PASS: Rejects non-string message with 400
+  ✓ PASS: Rejects whitespace-only message with 400
+  ✓ PASS: Rejects oversized message exceeding limit with 400
+  ✓ PASS: Flags payload_too_large status
+  ✓ PASS: Valid request sanitizes and trims message
+
+[32. Sliding Window Rate Limiting Enforcement] (5 tests)
+  ✓ PASS: Rate limit permits requests within quota
+  ✓ PASS: Rate limit blocks requests exceeding quota with HTTP 429
+  ✓ PASS: Payload flags status: rate_limited with Retry-After header
+  ✓ PASS: resetRateLimits allows subsequent requests
+
+[33. Prompt Grounding & Evidence Context Construction] (7 tests)
+  ✓ PASS: Detects Supplier A as target supplier
+  ✓ PASS: System prompt mandates authoritative calculations
+  ✓ PASS: System prompt enforces human approval boundaries
+  ✓ PASS: System prompt mandates explicit missing data reporting
+  ✓ PASS: User prompt injects exact deterministic score 92/100
+  ✓ PASS: User prompt cites relational inspection lots and purchase orders
+  ✓ PASS: Constructs standard 2-message array [system, user]
+
+[34. Mocked Grok API Call & Successful Explanation Synthesis] (4 tests)
+  ✓ PASS: Mocked Grok call succeeds with success: true
+  ✓ PASS: Source stamped as grok-ai
+  ✓ PASS: Returns expected synthesized explanation without live calls
+  ✓ PASS: Returns correct model
+
+[35. Provider Failure Scenarios & Safe Recovery] (8 tests)
+  ✓ PASS: Disabled client rejects call before network
+  ✓ PASS: Missing key client rejects call with unconfigured
+  ✓ PASS: Captures AbortError as timeout (HTTP 504)
+  ✓ PASS: Captures provider 429 as provider_rate_limited
+  ✓ PASS: Captures 401 as auth_error
+  ✓ PASS: Captures 402 as insufficient_credits
+  ✓ PASS: Captures 500 as provider_error
+  ✓ PASS: Captures malformed responses gracefully
+
+[36. Strict API Key Security & Client Bundle Hygiene] (84 tests)
+  ✓ PASS: Zero client files in src/ reference process.env.XAI_API_KEY
+  ✓ PASS: Zero client files in src/ reference VITE_XAI_API_KEY
+  ✓ PASS: .gitignore explicitly excludes .env and secrets/
+  ✓ PASS: .env.example contains only placeholders and ENABLE_GROK=false
+
+[37. Deterministic Fallback & Zero Mutation Guarantees] (6 tests)
+  ✓ PASS: Unified query in deterministic mode returns source: deterministic
+  ✓ PASS: Unified query with unconfigured Grok defaults safely to deterministic
+  ✓ PASS: STRICT NON-MUTATION: supplierA.riskScore remains exactly 92
+  ✓ PASS: STRICT NON-MUTATION: Quality score breakdown remains identical
+  ✓ PASS: STRICT NON-MUTATION: Rejection rate remains exactly 9.2%
+
+=======================================================
+ Test Execution Summary: 309 Passed, 0 Failed
 =======================================================
 ```
 
 ---
 
-## 10. Available NPM Scripts
+## 11. Available NPM Scripts
 
 | Command | Description |
 |---|---|
 | `npm run dev` | Starts Vite local development server at `http://localhost:5173` |
-| `npm test` | Runs the 165-test suite verifying risk engine, agents, orchestrator, assistant, FSM, and audit log |
+| `npm run server` | Boots Node.js/Express backend on port `3001` (Groq AI proxy & status) |
+| `npm test` | Runs the 392-test suite verifying risk engine, agents, orchestrator, assistant, FSM, audit log, and Groq AI |
 | `npm run lint` | Runs `oxlint` across all project files (0 warnings, 0 errors) |
 | `npm run build` | Compiles production assets into `dist/` bundle |
 | `npm run preview` | Previews the production build locally |
 
 ---
 
-## 11. Project Directory Structure
+## 12. Project Directory Structure
 
 ```
 SupplyShield AI/
 ├── index.html                   # HTML entry point, typography & metadata
-├── package.json                 # Scripts: dev, build, lint, test
+├── package.json                 # Scripts: dev, server, build, lint, test
 ├── package-lock.json            # Deterministic dependency lockfile
-├── vite.config.js               # Vite bundler configuration
+├── vite.config.js               # Vite bundler configuration with /api proxy
 ├── .oxlintrc.json               # Oxlint linter configuration
-├── .gitignore                   # Excludes node_modules, dist, .env
+├── .gitignore                   # Excludes node_modules, dist, .env, secrets/
+├── .env.example                 # Template environment variables (placeholders only)
 ├── README.md                    # Complete project documentation
+├── server/                      # Secure Node.js/Express Backend (Phase 5)
+│   ├── index.js                 # Server entry point & graceful shutdown
+│   ├── app.js                   # Express app factory, CORS, body limits & routes
+│   ├── config.js                # Environment config, safe status sanitization & defaults
+│   ├── middleware/
+│   │   ├── rateLimiter.js       # In-memory sliding window IP rate limiter (429)
+│   │   └── requestValidator.js  # Request size bounds, schema & anti-injection validation
+│   ├── services/
+│   │   ├── groqClient.js        # Official Groq Cloud API client with dependency injection
+│   │   └── promptBuilder.js     # Controlled, grounded prompt synthesizer
+│   └── routes/
+│       └── assistantRoutes.js   # GET /api/assistant/status & POST /api/assistant/chat
 ├── tests/
-│   └── run-tests.js             # 165 automated unit tests across Phases 2, 3, 4 & 6
+│   └── run-tests.js             # 392 automated unit tests across Phases 2, 3, 4, 6 & 5
 ├── src/
 │   ├── main.jsx                 # React root bootstrap
 │   ├── App.jsx                  # Main application orchestrator & tab routing
@@ -480,8 +623,9 @@ SupplyShield AI/
 │   │   ├── actionLifecycleService.js # Finite-state machine, transitions & validators
 │   │   ├── auditService.js      # Append-only immutable audit trail logger
 │   │   └── persistenceService.js# LocalStorage serialization, validation & recovery
-│   ├── assistant/               # AI Procurement Assistant & What-If Engine (Phase 4)
-│   │   ├── assistantService.js  # Query orchestrator, evidence synthesizer, and adapter
+│   ├── assistant/               # AI Procurement Assistant & What-If Engine (Phase 4 & 5)
+│   │   ├── assistantService.js  # Authoritative deterministic query orchestrator
+│   │   ├── groqAssistantService.js # Frontend Groq bridge, status polling & fallback
 │   │   ├── intentRouter.js      # NLP tokenized router, entity recognizer, and parser
 │   │   └── scenarioService.js   # Deterministic copy-on-write what-if simulation service
 │   ├── agents/                  # Multi-agent decision engine (Phase 3)
@@ -509,8 +653,8 @@ SupplyShield AI/
 │       ├── agentic/             # Agentic UI components (Phase 3)
 │       │   ├── AgenticIntelligenceSection.jsx   # Overview dashboard intelligence section
 │       │   └── AgentInvestigationReportModal.jsx# Comprehensive supplier decision dossier
-│       ├── assistant/           # Assistant UI components (Phase 4)
-│       │   └── AssistantView.jsx# Dedicated AI Assistant chat interface
+│       ├── assistant/           # Assistant UI components (Phase 4 & 5)
+│       │   └── AssistantView.jsx# Assistant chat interface with Groq indicator & mode toggle
 │       ├── decisions/           # Action Lifecycle UI components (Phase 6)
 │       │   ├── ActionDetailModal.jsx      # Detailed dossier & visual audit timeline modal
 │       │   └── TransitionReasonModal.jsx  # Rejection & cancellation rationale dialog
@@ -534,11 +678,12 @@ SupplyShield AI/
 
 ---
 
-## 12. Current Limitations & Architecture Disclaimers
+## 13. Current Limitations & Architecture Disclaimers
 
 - **Human Approval & Decision Support**: Approval of an action grants operational sign-off to proceed with an internal intervention. It **never** claims that an external supplier was contacted or that a real-world enterprise ERP purchase order was altered.
+- **Authoritative Deterministic Risk Calculations**: Groq AI explains and interprets the results of the deterministic engine. It **never** computes or alters numerical risk scores, price variances, or safety stock figures.
+- **Free-Tier Cost Protection**: Groq API integration is disabled by default (`ENABLE_GROQ=false`). Automated tests run 100% locally with zero live network calls to Groq Cloud. External AI calls require explicit configuration of API keys and billing controls by the user.
 - **Demonstration Audit Log**: The audit trail is an append-only in-browser governance log persisted in browser `localStorage`. It demonstrates tamper-proof audit concepts but is not a cryptographic distributed ledger or backend compliance vault.
-- **Deterministic Assistant, Not an LLM**: The current procurement assistant is a deterministic, intent-and-data-driven assistant powered by semantic heuristics, transactional data mapping, and mathematical risk simulation. It is intentionally designed without external cloud LLM dependencies to run 100% locally with zero latency, zero cloud costs, and zero hallucinations.
 - **Synthetic Demonstration Dataset**: All suppliers, purchase orders, inspection lots, quality metrics, and parts are synthetic demonstration records created for benchmark evaluation.
 - **Session State & Persistence**: Action records and audit entries persist across browser reloads via `localStorage` and can be reset to benchmark seeds at any time via the **"Reset Seeds"** control.
 

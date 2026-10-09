@@ -8,17 +8,25 @@ import {
   ShieldCheck, 
   CheckCircle2, 
   ArrowRight,
-  User
+  User,
+  Cpu,
+  Lock,
+  AlertTriangle,
+  RefreshCw,
+  Info
 } from 'lucide-react';
 import { processAssistantQuery } from '../../assistant/assistantService';
+import { checkGroqStatus, processAssistantQueryUnified } from '../../assistant/groqAssistantService';
 
 const STARTER_QUESTIONS = [
   "Which supplier is the riskiest and why?",
   "What are the top three procurement actions requiring attention?",
   "What evidence supports the highest-risk supplier's score?",
+  "Why is Supplier A classified as high risk?",
+  "Compare the deterministic risk findings for Supplier A and Supplier C",
   "What happens if we increase safety stock by 30 days for Supplier A?",
   "Which supplier has the largest calculated price variance?",
-  "What should procurement investigate first?"
+  "Explain the existing agents' findings in simple language"
 ];
 
 let msgSeq = 0;
@@ -34,8 +42,29 @@ export function AssistantView({
   const [messages, setMessages] = useState([]);
   const [inputQuery, setInputQuery] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [assistantMode, setAssistantMode] = useState('deterministic'); // 'deterministic' | 'groq'
+  const [groqStatus, setGroqStatus] = useState({
+    available: false,
+    enabled: false,
+    configured: false,
+    model: 'llama-3.3-70b-versatile',
+    modeDescription: 'Free-only deterministic mode'
+  });
+  const [activeError, setActiveError] = useState(null);
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Poll backend status on mount
+  useEffect(() => {
+    let isMounted = true;
+    checkGroqStatus().then(status => {
+      if (isMounted) {
+        setGroqStatus(status);
+      }
+    });
+    return () => { isMounted = false; };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -45,9 +74,11 @@ export function AssistantView({
     scrollToBottom();
   }, [messages, isProcessing]);
 
-  const handleSendMessage = useCallback((textToSend) => {
+  const handleSendMessage = useCallback(async (textToSend, overrideMode = null) => {
     const query = (textToSend || inputQuery).trim();
     if (!query || isProcessing) return;
+
+    setActiveError(null);
 
     const userMessage = {
       id: generateMsgId('USER'),
@@ -60,13 +91,50 @@ export function AssistantView({
     setInputQuery('');
     setIsProcessing(true);
 
-    // Deterministic processing with immediate UI feedback
-    setTimeout(() => {
-      const assistantResponse = processAssistantQuery(query, suppliers, messages);
-      setMessages(prev => [...prev, assistantResponse]);
+    const modeToUse = overrideMode || assistantMode;
+
+    try {
+      if (modeToUse === 'groq') {
+        const response = await processAssistantQueryUnified(query, suppliers, messages, {
+          useGroq: true,
+          groqConfigured: groqStatus.enabled && groqStatus.configured
+        });
+
+        if (response.groqError && !response.content) {
+          setActiveError({
+            query,
+            error: response.groqError,
+            status: response.status
+          });
+        }
+
+        setMessages(prev => [...prev, response]);
+      } else {
+        // Direct local deterministic processing
+        setTimeout(() => {
+          const deterministicResponse = processAssistantQuery(query, suppliers, messages);
+          setMessages(prev => [...prev, {
+            ...deterministicResponse,
+            source: 'deterministic',
+            isAiGenerated: false
+          }]);
+          setIsProcessing(false);
+        }, 60);
+        return;
+      }
+    } catch (err) {
+      // Safe fallback to deterministic on unexpected exception
+      const fallback = processAssistantQuery(query, suppliers, messages);
+      setMessages(prev => [...prev, {
+        ...fallback,
+        source: 'deterministic-fallback',
+        isAiGenerated: false,
+        fallbackReason: `Client communication error: ${err.message}. Answered via deterministic engine.`
+      }]);
+    } finally {
       setIsProcessing(false);
-    }, 60);
-  }, [inputQuery, isProcessing, suppliers, messages]);
+    }
+  }, [inputQuery, isProcessing, assistantMode, groqStatus, suppliers, messages]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -77,7 +145,18 @@ export function AssistantView({
 
   const handleClearChat = () => {
     setMessages([]);
+    setActiveError(null);
     if (inputRef.current) inputRef.current.focus();
+  };
+
+  const handleManualRetryGroq = (query) => {
+    setActiveError(null);
+    handleSendMessage(query, 'groq');
+  };
+
+  const handleManualFallbackDeterministic = (query) => {
+    setActiveError(null);
+    handleSendMessage(query, 'deterministic');
   };
 
   return (
@@ -100,54 +179,160 @@ export function AssistantView({
         border: '1px solid var(--border-subtle)',
         borderRadius: 'var(--radius-md)'
       }}>
+        {/* Title & Engine Status */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
             width: '36px',
             height: '36px',
             borderRadius: '8px',
-            background: 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)',
+            background: assistantMode === 'groq' && groqStatus.enabled
+              ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+              : 'linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#ffffff',
-            boxShadow: '0 0 10px rgba(14, 165, 233, 0.3)'
+            boxShadow: '0 0 10px rgba(14, 165, 233, 0.3)',
+            transition: 'background 0.3s ease'
           }}>
-            <Bot size={20} />
+            {assistantMode === 'groq' ? <Sparkles size={20} /> : <Bot size={20} />}
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <h2 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>
                 AI Procurement Assistant
               </h2>
-              <span style={{
-                fontSize: '0.68rem',
-                fontWeight: 600,
-                color: 'var(--teal-primary)',
-                backgroundColor: 'rgba(14, 165, 233, 0.12)',
-                border: '1px solid rgba(14, 165, 233, 0.25)',
-                padding: '2px 8px',
-                borderRadius: '9999px'
-              }}>
-                Deterministic Intent Engine
-              </span>
+
+              {/* Status Indicator Pill */}
+              {groqStatus.enabled && groqStatus.configured ? (
+                <span style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  color: '#10b981',
+                  backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+                  Groq AI Active ({groqStatus.model})
+                </span>
+              ) : (
+                <span style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 600,
+                  color: 'var(--teal-primary)',
+                  backgroundColor: 'rgba(14, 165, 233, 0.12)',
+                  border: '1px solid rgba(14, 165, 233, 0.25)',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <Lock size={10} />
+                  Groq AI: Disabled (Free Tier Safety)
+                </span>
+              )}
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              100% local evidence-backed analysis • Cites purchase orders, inspection lots, and what-if scenarios
+              {assistantMode === 'groq'
+                ? 'Groq-powered natural language explanations (Meta Llama 3.3 70B) • Grounded in authoritative risk records'
+                : '100% local evidence-backed analysis • Zero API costs • Authoritative deterministic engine'}
             </p>
           </div>
         </div>
 
-        {messages.length > 0 && (
-          <button
-            onClick={handleClearChat}
-            className="btn btn-secondary btn-sm"
-            style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <Trash2 size={13} style={{ color: 'var(--text-muted)' }} />
-            Clear Conversation
-          </button>
-        )}
+        {/* Engine Switcher Controls & Clear Conversation */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Segmented Mode Toggle */}
+          <div style={{
+            display: 'flex',
+            backgroundColor: 'var(--bg-input)',
+            borderRadius: '6px',
+            padding: '2px',
+            border: '1px solid var(--border-subtle)'
+          }}>
+            <button
+              onClick={() => setAssistantMode('deterministic')}
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: assistantMode === 'deterministic' ? 600 : 400,
+                color: assistantMode === 'deterministic' ? 'var(--text-main)' : 'var(--text-muted)',
+                backgroundColor: assistantMode === 'deterministic' ? 'var(--bg-card-elevated)' : 'transparent',
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.15s ease'
+              }}
+              title="Runs 100% offline using deterministic calculations without external network calls"
+            >
+              <Cpu size={12} />
+              Deterministic (Free / Local)
+            </button>
+            <button
+              onClick={() => setAssistantMode('groq')}
+              style={{
+                fontSize: '0.72rem',
+                fontWeight: assistantMode === 'groq' ? 600 : 400,
+                color: assistantMode === 'groq' ? 'var(--teal-light)' : 'var(--text-muted)',
+                backgroundColor: assistantMode === 'groq' ? 'var(--bg-card-elevated)' : 'transparent',
+                border: 'none',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                transition: 'all 0.15s ease'
+              }}
+              title="Queries Groq API for natural-language explanations (disabled by default)"
+            >
+              <Sparkles size={12} />
+              Groq AI (Free Tier)
+            </button>
+          </div>
+
+          {messages.length > 0 && (
+            <button
+              onClick={handleClearChat}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Trash2 size={13} style={{ color: 'var(--text-muted)' }} />
+              Clear
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Safety Notice Banner when Groq Mode is Selected but Disabled */}
+      {assistantMode === 'groq' && (!groqStatus.enabled || !groqStatus.configured) && (
+        <div style={{
+          backgroundColor: 'rgba(14, 165, 233, 0.08)',
+          border: '1px solid rgba(14, 165, 233, 0.25)',
+          borderRadius: 'var(--radius-sm)',
+          padding: '8px 14px',
+          fontSize: '0.75rem',
+          color: 'var(--text-secondary)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <Info size={15} style={{ color: 'var(--teal-primary)', flexShrink: 0 }} />
+          <div>
+            <strong style={{ color: 'var(--text-main)' }}>Free-Only Safety Mode Active:</strong> Groq AI calls are disabled in server configuration (<code>ENABLE_GROQ=false</code>). 
+            Questions will be answered instantly via the authoritative <strong>Deterministic Engine</strong> with zero API fees.
+          </div>
+        </div>
+      )}
 
       {/* Main Chat Conversation Container */}
       <div style={{
@@ -192,7 +377,7 @@ export function AssistantView({
                 How can I assist your procurement decisions today?
               </h3>
               <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '540px' }}>
-                Ask questions about supplier risks, compare contract price variances, evaluate quality defects, or run hypothetical what-if simulations.
+                Ask questions about supplier risks, compare contract price variances, evaluate quality defects, or synthesize multi-vector findings.
               </p>
             </div>
 
@@ -243,6 +428,8 @@ export function AssistantView({
         {/* Message Stream */}
         {messages.map((msg) => {
           const isUser = msg.role === 'user';
+          const isGroqMessage = msg.source === 'groq-ai' || msg.source === 'grok-ai' || msg.isAiGenerated;
+          const isFallbackMessage = msg.source === 'deterministic-fallback';
 
           return (
             <div
@@ -260,15 +447,19 @@ export function AssistantView({
                   width: '32px',
                   height: '32px',
                   borderRadius: '6px',
-                  backgroundColor: 'rgba(14, 165, 233, 0.15)',
-                  border: '1px solid rgba(14, 165, 233, 0.3)',
+                  backgroundColor: isGroqMessage
+                    ? 'rgba(16, 185, 129, 0.15)'
+                    : 'rgba(14, 165, 233, 0.15)',
+                  border: isGroqMessage
+                    ? '1px solid rgba(16, 185, 129, 0.3)'
+                    : '1px solid rgba(14, 165, 233, 0.3)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: 'var(--teal-primary)',
+                  color: isGroqMessage ? '#10b981' : 'var(--teal-primary)',
                   flexShrink: 0
                 }}>
-                  <Bot size={18} />
+                  {isGroqMessage ? <Sparkles size={18} /> : <Bot size={18} />}
                 </div>
               )}
 
@@ -287,13 +478,91 @@ export function AssistantView({
               }}>
                 {/* Header (Assistant) */}
                 {!isUser && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--teal-primary)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                      SupplyShield Intelligence • {msg.intent?.replace(/_/g, ' ')}
-                    </span>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    paddingBottom: '6px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isGroqMessage ? (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          color: '#10b981',
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          <Sparkles size={11} />
+                          Groq AI Explanation ({msg.model || 'Groq Cloud'})
+                        </span>
+                      ) : isFallbackMessage ? (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          color: '#f59e0b',
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase'
+                        }}>
+                          Deterministic Engine • Fallback
+                        </span>
+                      ) : (
+                        <span style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          color: 'var(--teal-primary)',
+                          letterSpacing: '0.04em',
+                          textTransform: 'uppercase'
+                        }}>
+                          SupplyShield Intelligence • {msg.intent?.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                    </div>
                     <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
                       {msg.timestamp}
                     </span>
+                  </div>
+                )}
+
+                {/* AI Explanation Banner vs Deterministic Marker */}
+                {!isUser && isGroqMessage && (
+                  <div style={{
+                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    borderRadius: '4px',
+                    padding: '6px 10px',
+                    fontSize: '0.72rem',
+                    color: '#86efac',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <Sparkles size={12} style={{ flexShrink: 0 }} />
+                    <span>
+                      <strong>AI Explanation:</strong> Synthesized by Groq AI. Numerical risk scores and financial figures remain strictly calculated by the authoritative risk engine.
+                    </span>
+                  </div>
+                )}
+
+                {/* Fallback explanation banner if applicable */}
+                {!isUser && isFallbackMessage && msg.fallbackReason && (
+                  <div style={{
+                    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    borderRadius: '4px',
+                    padding: '6px 10px',
+                    fontSize: '0.72rem',
+                    color: '#fde047',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                    <span>{msg.fallbackReason}</span>
                   </div>
                 )}
 
@@ -313,7 +582,7 @@ export function AssistantView({
                   }}>
                     <div style={{ color: 'var(--teal-light)', fontWeight: 600, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <CheckCircle2 size={13} />
-                      Observed Transaction Facts:
+                      Verified Calculated Transaction Facts:
                     </div>
                     <ul style={{ paddingLeft: '16px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '2px' }}>
                       {msg.observedFacts.map((fact, i) => (
@@ -524,6 +793,47 @@ export function AssistantView({
           );
         })}
 
+        {/* Inline Manual Retry Card if an error occurred */}
+        {activeError && (
+          <div style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            padding: '12px 16px',
+            fontSize: '0.8rem',
+            color: 'var(--text-main)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171', fontWeight: 600 }}>
+              <AlertTriangle size={15} />
+              Groq AI Request Exception
+            </div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+              {activeError.error || 'The external AI service is currently unavailable or rate limited.'}
+            </p>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+              <button
+                onClick={() => handleManualRetryGroq(activeError.query)}
+                className="btn btn-secondary btn-sm"
+                style={{ fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+              >
+                <RefreshCw size={12} />
+                Retry with Groq AI
+              </button>
+              <button
+                onClick={() => handleManualFallbackDeterministic(activeError.query)}
+                className="btn btn-primary btn-sm"
+                style={{ fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '5px' }}
+              >
+                <Cpu size={12} />
+                Answer via Deterministic Engine
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Processing Indicator */}
         {isProcessing && (
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -531,14 +841,14 @@ export function AssistantView({
               width: '32px',
               height: '32px',
               borderRadius: '6px',
-              backgroundColor: 'rgba(14, 165, 233, 0.15)',
-              border: '1px solid rgba(14, 165, 233, 0.3)',
+              backgroundColor: assistantMode === 'groq' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(14, 165, 233, 0.15)',
+              border: assistantMode === 'groq' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(14, 165, 233, 0.3)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'var(--teal-primary)'
+              color: assistantMode === 'groq' ? '#10b981' : 'var(--teal-primary)'
             }}>
-              <Bot size={18} />
+              {assistantMode === 'groq' ? <Sparkles size={18} /> : <Bot size={18} />}
             </div>
             <div style={{
               backgroundColor: 'var(--bg-card-elevated)',
@@ -551,8 +861,10 @@ export function AssistantView({
               alignItems: 'center',
               gap: '8px'
             }}>
-              <span className="badge-dot" style={{ backgroundColor: 'var(--teal-primary)' }} />
-              Querying transaction records and decision orchestrator...
+              <span className="badge-dot" style={{ backgroundColor: assistantMode === 'groq' ? '#10b981' : 'var(--teal-primary)' }} />
+              {assistantMode === 'groq'
+                ? `Synthesizing supplier evidence with Groq AI (${groqStatus.model})...`
+                : 'Querying transaction records and decision orchestrator...'}
             </div>
           </div>
         )}
@@ -575,7 +887,10 @@ export function AssistantView({
           value={inputQuery}
           onChange={(e) => setInputQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask a question about supplier risks, purchase orders, or what-if scenarios (Press Enter to send)..."
+          placeholder={assistantMode === 'groq' 
+            ? "Ask Groq to explain supplier risks, compare evidence, or analyze mitigation trade-offs..."
+            : "Ask a question about supplier risks, purchase orders, or what-if scenarios (Press Enter to send)..."
+          }
           rows={2}
           style={{
             flex: 1,

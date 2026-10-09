@@ -658,6 +658,279 @@ const sortedByUrgency = sortActions(filterSample, 'urgency');
 assert(sortedByUrgency[0].urgency === "CRITICAL", "sortActions places CRITICAL urgency first");
 assert(sortedByUrgency[sortedByUrgency.length - 1].urgency === "LOW", "sortActions places LOW urgency last");
 
+// =======================================================
+// SupplyShield AI — Phase 5 Secure Groq AI Verification
+// =======================================================
+console.log("\n=======================================================");
+console.log(" SupplyShield AI — Phase 5 Secure Groq AI Verification");
+console.log("=======================================================\n");
+
+const fs = await import('fs');
+const path = await import('path');
+const { getConfig } = await import('../server/config.js');
+const { validateChatRequest } = await import('../server/middleware/requestValidator.js');
+const { createRateLimiter, resetRateLimits } = await import('../server/middleware/rateLimiter.js');
+const { buildGroqPrompt } = await import('../server/services/promptBuilder.js');
+const { GroqClient } = await import('../server/services/groqClient.js');
+const { processAssistantQueryUnified } = await import('../src/assistant/groqAssistantService.js');
+
+// 30. Groq AI Configuration & Default Safe State
+console.log("[30. Groq AI Configuration & Default Safe State]");
+const defaultCfg = getConfig();
+assert(defaultCfg.ENABLE_GROQ === false, "Groq is disabled by default (ENABLE_GROQ=false)");
+assert(defaultCfg.isGroqEnabled() === false, "isGroqEnabled() returns false by default");
+assert(defaultCfg.isGroqConfigured() === false, "isGroqConfigured() returns false by default");
+
+const safeStatus = defaultCfg.getClientSafeStatus();
+assert(safeStatus.enabled === false, "getClientSafeStatus reports enabled: false");
+assert(safeStatus.configured === false, "getClientSafeStatus reports configured: false");
+assert(safeStatus.provider === "deterministic-local", "Default provider is deterministic-local");
+assert(safeStatus.GROQ_API_KEY === undefined, "getClientSafeStatus never contains GROQ_API_KEY");
+assert(safeStatus.apiKey === undefined, "getClientSafeStatus never contains apiKey");
+
+// Custom config evaluations
+const customDisabledWithKey = getConfig({ ENABLE_GROQ: "false", GROQ_API_KEY: "test-secret-key" });
+assert(customDisabledWithKey.isGroqEnabled() === false, "Custom config with ENABLE_GROQ=false remains disabled even when key provided");
+assert(customDisabledWithKey.isGroqConfigured() === false, "Custom config with ENABLE_GROQ=false is not configured");
+
+const customEnabledNoKey = getConfig({ ENABLE_GROQ: "true", GROQ_API_KEY: "" });
+assert(customEnabledNoKey.isGroqEnabled() === true, "Custom config with ENABLE_GROQ=true returns enabled true");
+assert(customEnabledNoKey.isGroqConfigured() === false, "Custom config without key returns configured false");
+
+const customEnabledWithKey = getConfig({ ENABLE_GROQ: "true", GROQ_API_KEY: "gsk_real_key_mock" });
+assert(customEnabledWithKey.isGroqConfigured() === true, "Custom config with key returns configured true");
+assert(customEnabledWithKey.GROQ_MODEL === "llama-3.3-70b-versatile", "Defaults to llama-3.3-70b-versatile free-tier model");
+
+// 31. Request Validation & Payload Constraints
+console.log("\n[31. Request Validation & Payload Constraints]");
+function testExpressMiddleware(fn, req) {
+  let statusCode = 200;
+  let jsonPayload = null;
+  let nextCalled = false;
+  const res = {
+    status(code) { statusCode = code; return this; },
+    json(payload) { jsonPayload = payload; return this; },
+    setHeader() { return this; }
+  };
+  const next = () => { nextCalled = true; };
+  fn(req, res, next);
+  return { statusCode, jsonPayload, nextCalled };
+}
+
+const missingBody = testExpressMiddleware(validateChatRequest, { body: null });
+assert(missingBody.statusCode === 400, "Rejects null body with 400");
+assert(missingBody.jsonPayload?.fallbackRecommended === true, "Rejection advises fallbackRecommended: true");
+
+const missingMessage = testExpressMiddleware(validateChatRequest, { body: {} });
+assert(missingMessage.statusCode === 400, "Rejects missing message with 400");
+
+const nonStringMessage = testExpressMiddleware(validateChatRequest, { body: { message: 12345 } });
+assert(nonStringMessage.statusCode === 400, "Rejects non-string message with 400");
+
+const emptyMessage = testExpressMiddleware(validateChatRequest, { body: { message: "   " } });
+assert(emptyMessage.statusCode === 400, "Rejects whitespace-only message with 400");
+
+const oversizedMessage = testExpressMiddleware(validateChatRequest, { body: { message: "A".repeat(2500) } });
+assert(oversizedMessage.statusCode === 400, "Rejects oversized message exceeding limit with 400");
+assert(oversizedMessage.jsonPayload?.status === "payload_too_large", "Flags payload_too_large status");
+
+const validReq = { body: { message: "  Why is Supplier A high risk?  ", supplierId: "SUP-001" } };
+const validPass = testExpressMiddleware(validateChatRequest, validReq);
+assert(validPass.nextCalled === true, "Valid request calls next()");
+assert(validReq.sanitized.message === "Why is Supplier A high risk?", "Sanitizes and trims message");
+assert(validReq.sanitized.supplierId === "SUP-001", "Preserves supplierId");
+
+// 32. In-Memory Sliding Window Rate Limiting Enforcement
+console.log("\n[32. Sliding Window Rate Limiting Enforcement]");
+resetRateLimits();
+const testLimiter = createRateLimiter({ maxRequests: 2, windowMs: 60000 });
+const ipReq = { ip: "192.168.1.100", headers: {}, socket: {} };
+
+const r1 = testExpressMiddleware(testLimiter, ipReq);
+assert(r1.nextCalled === true, "Rate limit permits request #1");
+const r2 = testExpressMiddleware(testLimiter, ipReq);
+assert(r2.nextCalled === true, "Rate limit permits request #2");
+const r3 = testExpressMiddleware(testLimiter, ipReq);
+assert(r3.statusCode === 429, "Rate limit blocks request #3 with HTTP 429");
+assert(r3.jsonPayload?.status === "rate_limited", "Payload flags status: rate_limited");
+assert(r3.jsonPayload?.retryAfterSeconds > 0, "Provides retryAfterSeconds");
+
+resetRateLimits();
+const rAfterReset = testExpressMiddleware(testLimiter, ipReq);
+assert(rAfterReset.nextCalled === true, "resetRateLimits allows requests again");
+
+// 33. Prompt Grounding & Evidence Context Construction
+console.log("\n[33. Prompt Grounding & Evidence Context Construction]");
+const promptRes = buildGroqPrompt({ message: "Why is Supplier A classified as high risk?" });
+assert(promptRes.targetSupplier?.code === "Supplier A", "Detects Supplier A as target supplier");
+assert(promptRes.systemPrompt.includes("DETERMINISTIC CALCULATIONS ARE AUTHORITATIVE"), "System prompt mandates authoritative calculations");
+assert(promptRes.systemPrompt.includes("ZERO authority to approve, reject"), "System prompt enforces human approval boundaries");
+assert(promptRes.systemPrompt.includes("EXPLICIT MISSING DATA REPORTING"), "System prompt mandates explicit missing data reporting");
+assert(promptRes.userPrompt.includes("Score 92/100"), "User prompt injects exact deterministic score 92/100");
+assert(promptRes.userPrompt.includes("LOT-QA-912") || promptRes.userPrompt.includes("LOT-QA"), "User prompt cites relational inspection lots");
+assert(promptRes.userPrompt.includes("PO-2026"), "User prompt cites relational purchase order records");
+assert(promptRes.messages.length === 2, "Constructs standard 2-message array [system, user]");
+
+// 34. Mocked Groq API Call & Successful Explanation Synthesis
+console.log("\n[34. Mocked Groq API Call & Successful Explanation Synthesis]");
+const mockGroqConfig = getConfig({ ENABLE_GROQ: "true", GROQ_API_KEY: "mock-groq-key-secret" });
+
+const mockSuccessFetch = async (url, options) => {
+  assert(url.includes("api.groq.com/openai/v1/chat/completions"), "Calls official Groq chat completions endpoint");
+  assert(options.headers["Authorization"] === "Bearer mock-groq-key-secret", "Sends Bearer token in Authorization header");
+  const body = JSON.parse(options.body);
+  assert(body.model === "llama-3.3-70b-versatile", "Requests configured Groq model");
+  assert(body.temperature === 0.2, "Requests factual low temperature (0.2)");
+
+  return {
+    ok: true,
+    status: 200,
+    async json() {
+      return {
+        id: "chatcmpl-mock-success",
+        model: "llama-3.3-70b-versatile",
+        choices: [
+          {
+            message: {
+              role: "assistant",
+              content: "Supplier A is high risk (92/100) due to 9.2% quality defect spike in LOT-QA-912 and +$74,000 price variance."
+            }
+          }
+        ],
+        usage: { total_tokens: 150 }
+      };
+    }
+  };
+};
+
+const clientWithMock = new GroqClient({ config: mockGroqConfig, fetchFn: mockSuccessFetch });
+const successRes = await clientWithMock.queryGroq({ messages: [{ role: "user", content: "Explain Supplier A" }] });
+assert(successRes.success === true, "Mocked Groq call succeeds with success: true");
+assert(successRes.source === "groq-ai", "Source stamped as groq-ai");
+assert(successRes.answer.includes("Supplier A is high risk"), "Returns expected synthesized explanation");
+assert(successRes.model === "llama-3.3-70b-versatile", "Returns correct model");
+
+// 35. Provider Failure Scenarios & Safe Recovery
+console.log("\n[35. Provider Failure Scenarios & Safe Recovery]");
+// Disabled client
+const disabledClient = new GroqClient({ config: getConfig({ ENABLE_GROQ: "false" }) });
+const disabledRes = await disabledClient.queryGroq({ messages: [] });
+assert(disabledRes.success === false && disabledRes.status === "disabled", "Disabled client rejects call before network");
+
+// Missing key client
+const noKeyClient = new GroqClient({ config: getConfig({ ENABLE_GROQ: "true", GROQ_API_KEY: "" }) });
+const noKeyRes = await noKeyClient.queryGroq({ messages: [] });
+assert(noKeyRes.success === false && noKeyRes.status === "unconfigured", "Missing key client rejects call with unconfigured");
+
+// Network timeout
+const mockTimeoutFetch = async () => {
+  const err = new Error("The operation was aborted");
+  err.name = "AbortError";
+  throw err;
+};
+const timeoutClient = new GroqClient({ config: mockGroqConfig, fetchFn: mockTimeoutFetch });
+const timeoutRes = await timeoutClient.queryGroq({ messages: [] });
+assert(timeoutRes.success === false && timeoutRes.status === "timeout", "Captures AbortError as timeout");
+
+// Provider rate limiting (429)
+const mock429Fetch = async () => ({
+  ok: false,
+  status: 429,
+  async json() { return { error: { message: "Rate limit reached" } }; }
+});
+const client429 = new GroqClient({ config: mockGroqConfig, fetchFn: mock429Fetch });
+const res429 = await client429.queryGroq({ messages: [] });
+assert(res429.success === false && res429.status === "provider_rate_limited", "Captures provider 429 as provider_rate_limited");
+
+// Provider auth error (401)
+const mock401Fetch = async () => ({
+  ok: false,
+  status: 401,
+  async json() { return { error: { message: "Invalid API key" } }; }
+});
+const client401 = new GroqClient({ config: mockGroqConfig, fetchFn: mock401Fetch });
+const res401 = await client401.queryGroq({ messages: [] });
+assert(res401.success === false && res401.status === "auth_error", "Captures 401 as auth_error");
+
+// Provider server error (500)
+const mock500Fetch = async () => ({
+  ok: false,
+  status: 500,
+  async json() { return { error: { message: "Groq Server Error" } }; }
+});
+const client500 = new GroqClient({ config: mockGroqConfig, fetchFn: mock500Fetch });
+const res500 = await client500.queryGroq({ messages: [] });
+assert(res500.success === false && res500.status === "provider_error", "Captures 500 as provider_error");
+
+// Malformed provider response (missing choices / bad format)
+const mockBadJsonFetch = async () => ({
+  ok: true,
+  status: 200,
+  async json() { return { unexpectedField: "no choices array" }; }
+});
+const clientBad = new GroqClient({ config: mockGroqConfig, fetchFn: mockBadJsonFetch });
+const resBad = await clientBad.queryGroq({ messages: [] });
+assert(resBad.success === false && resBad.status === "malformed_response", "Captures missing choices as malformed_response");
+
+// 36. Strict API Key Security & Client Bundle Hygiene
+console.log("\n[36. Strict API Key Security & Client Bundle Hygiene]");
+const srcDir = path.resolve('src');
+function checkDirectoryForSecret(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      checkDirectoryForSecret(fullPath);
+    } else if (entry.isFile() && /\.(js|jsx|ts|tsx)$/.test(entry.name)) {
+      const content = fs.readFileSync(fullPath, 'utf8');
+      assert(!content.includes("process.env.GROQ_API_KEY"), `Client file ${entry.name} does not reference process.env.GROQ_API_KEY`);
+      assert(!content.includes("VITE_GROQ_API_KEY"), `Client file ${entry.name} does not reference VITE_GROQ_API_KEY`);
+      assert(!content.includes("process.env.XAI_API_KEY"), `Client file ${entry.name} does not reference process.env.XAI_API_KEY`);
+      assert(!content.includes("VITE_XAI_API_KEY"), `Client file ${entry.name} does not reference VITE_XAI_API_KEY`);
+    }
+  }
+}
+checkDirectoryForSecret(srcDir);
+
+// Verify gitignore protects .env
+const gitignoreContent = fs.readFileSync(path.resolve('.gitignore'), 'utf8');
+assert(gitignoreContent.includes(".env"), ".gitignore explicitly excludes .env");
+assert(gitignoreContent.includes("secrets/"), ".gitignore explicitly excludes secrets/");
+
+// Verify .env.example contains placeholders only
+const envExampleContent = fs.readFileSync(path.resolve('.env.example'), 'utf8');
+assert(envExampleContent.includes("ENABLE_GROQ=false"), ".env.example defaults ENABLE_GROQ to false");
+assert(envExampleContent.includes("your_groq_api_key_here"), ".env.example contains only placeholders");
+
+// 37. Deterministic Fallback & Zero Mutation Guarantees
+console.log("\n[37. Deterministic Fallback & Zero Mutation Guarantees]");
+const originalScoreBefore = supplierA.riskScore;
+const originalBreakdownBefore = { ...supplierA.scoreBreakdown };
+
+// Test unified assistant in deterministic mode
+const unifiedDeterministic = await processAssistantQueryUnified(
+  "Why is Supplier A classified as high risk?",
+  SUPPLIERS,
+  [],
+  { useGroq: false }
+);
+assert(unifiedDeterministic.source === "deterministic", "Unified query in deterministic mode returns source: deterministic");
+assert(unifiedDeterministic.content.length > 50, "Deterministic query returns rich content");
+
+// Test unified assistant in Groq mode with Groq disabled
+const unifiedFallback = await processAssistantQueryUnified(
+  "Why is Supplier A classified as high risk?",
+  SUPPLIERS,
+  [],
+  { useGroq: true, groqConfigured: false }
+);
+assert(unifiedFallback.source === "deterministic", "Unified query with unconfigured Groq defaults safely to deterministic");
+
+// Strict Non-Mutation verification
+assert(supplierA.riskScore === originalScoreBefore, `STRICT NON-MUTATION: supplierA.riskScore remains exactly ${originalScoreBefore}`);
+assert(supplierA.scoreBreakdown.qualityScore === originalBreakdownBefore.qualityScore, "STRICT NON-MUTATION: Quality score breakdown remains identical");
+assert(supplierA.rejectionRate === 9.2, "STRICT NON-MUTATION: Rejection rate remains exactly 9.2%");
+
 console.log("\n=======================================================");
 console.log(` Test Execution Summary: ${passedTests} Passed, ${failedTests} Failed`);
 console.log("=======================================================\n");
@@ -667,4 +940,5 @@ if (failedTests > 0) {
 } else {
   process.exit(0);
 }
+
 
