@@ -17,7 +17,7 @@ import {
   INVENTORY_RECORDS,
   COMPLIANCE_RECORDS,
   DEPENDENCY_RECORDS
-} from './transactionRecords';
+} from './transactionRecords.js';
 
 import {
   calculateQualityMetrics,
@@ -27,7 +27,7 @@ import {
   calculateInventoryMetrics,
   calculateCompositeRiskScore,
   evaluateCrossSignalIntelligence
-} from '../engine/riskEngine';
+} from '../engine/riskEngine.js';
 
 export const DEMO_METADATA = {
   isDemonstrationData: true,

@@ -11,7 +11,8 @@ import {
   TrendingUp, 
   Package,
   FileSearch,
-  Sliders
+  Sliders,
+  Cpu
 } from 'lucide-react';
 import { RiskBadge, CriticalityBadge } from '../common/Badge';
 
@@ -20,7 +21,8 @@ export function SupplierDetailModal({
   onClose, 
   onOpenAnalysis,
   onOpenEvidence,
-  onOpenSimulator 
+  onOpenSimulator,
+  onOpenAgentReport 
 }) {
   if (!supplier) return null;
 
@@ -363,6 +365,19 @@ export function SupplierDetailModal({
             >
               <Sliders size={14} style={{ color: 'var(--teal-primary)' }} />
               What-If Simulator
+            </button>
+          )}
+
+          {onOpenAgentReport && (
+            <button 
+              onClick={() => {
+                onClose();
+                onOpenAgentReport(supplier);
+              }} 
+              className="btn btn-secondary"
+            >
+              <Cpu size={14} style={{ color: 'var(--teal-primary)' }} />
+              Agent Decision Dossier
             </button>
           )}
 

@@ -3,6 +3,7 @@ import { Info } from 'lucide-react';
 import { SummaryCards } from '../dashboard/SummaryCards';
 import { RiskDistribution } from '../dashboard/RiskDistribution';
 import { SupplierTable } from '../suppliers/SupplierTable';
+import { AgenticIntelligenceSection } from '../agentic/AgenticIntelligenceSection';
 
 export function OverviewView({ 
   suppliers = [], 
@@ -10,6 +11,8 @@ export function OverviewView({
   onAnalyseSupplier,
   onOpenEvidence,
   onOpenSimulator,
+  onOpenAgentReport,
+  onQueueDecision,
   currentRiskFilter,
   onSelectRiskFilter,
   pendingActionsCount,
@@ -51,8 +54,17 @@ export function OverviewView({
         onOpenSimulator={onOpenSimulator}
       />
 
+      {/* Agentic Intelligence Section */}
+      <AgenticIntelligenceSection 
+        suppliers={suppliers}
+        onInspectSupplier={onInspectSupplier}
+        onOpenAgentReport={onOpenAgentReport}
+        onQueueDecision={onQueueDecision}
+        onNavigateTab={onNavigateTab}
+      />
+
       {/* Main Supplier Registry Table */}
-      <div style={{ marginTop: '24px' }}>
+      <div style={{ marginTop: '28px' }}>
         <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <h2 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)' }}>

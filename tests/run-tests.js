@@ -203,6 +203,115 @@ assert(simResult.scoreDelta < -15, "Measurable risk drop of >15 points achieved"
 assert(simResult.originalScore === 90, "Preserves original score without mutating base metrics");
 assert(simResult.narrative.includes("risk reduction"), "Generates meaningful narrative explanation");
 
+// =======================================================
+// Phase 3: Agentic Decision-Making Engine Tests
+// =======================================================
+console.log("\n=======================================================");
+console.log(" SupplyShield AI — Phase 3 Agentic Engine Verification");
+console.log("=======================================================\n");
+
+// Dynamic import of Phase 3 agents and dataset
+const { runRiskInvestigationAgent } = await import('../src/agents/riskInvestigationAgent.js');
+const { runCrossSignalAgent } = await import('../src/agents/crossSignalAgent.js');
+const { runProcurementRecommendationAgent } = await import('../src/agents/procurementRecommendationAgent.js');
+const { runDecisionReviewAgent } = await import('../src/agents/decisionReviewAgent.js');
+const { orchestrateSupplierDecision, orchestrateAllSuppliers } = await import('../src/agents/decisionOrchestrator.js');
+const { SUPPLIERS } = await import('../src/data/suppliers.js');
+
+const supplierA = SUPPLIERS.find(s => s.code === "Supplier A");
+assert(supplierA !== undefined, "Loaded Supplier A from compiled master registry");
+
+// 9. Agent A: Risk Investigation Agent Tests
+console.log("[9. Agent A: Risk Investigation Agent Tests]");
+const investA = runRiskInvestigationAgent(supplierA);
+assert(investA.status === "COMPLETED", "Agent A completes investigation with status COMPLETED");
+assert(investA.findings.length >= 5, "Agent A produces comprehensive findings across operational vectors");
+assert(investA.primaryRiskDrivers.length >= 2, "Agent A identifies elevated primary risk drivers");
+
+// Evidence attribution test
+const priceFinding = investA.findings.find(f => f.vector === "PRICE");
+assert(priceFinding !== undefined, "Agent A investigates commercial price vector");
+assert(priceFinding.supportingRecords?.discrepantPOs?.length >= 2, "Agent A attributes exact discrepant PO records");
+assert(priceFinding.metrics?.totalOverpaymentBilledDollars === 74000, "Agent A verifies exact $74,000 overpayment from POs");
+
+// Missing/incomplete evidence test
+const sparseSupplier = { id: "SPARSE-01", code: "Sparse S", name: "Sparse Test Vendor", riskScore: 20, riskLevel: "LOW" };
+const investSparse = runRiskInvestigationAgent(sparseSupplier);
+assert(investSparse.status === "COMPLETED", "Agent A handles sparse/missing records gracefully");
+const qualSparse = investSparse.findings.find(f => f.vector === "QUALITY");
+assert(qualSparse.evidenceStrength === "INSUFFICIENT", "Agent A explicitly flags missing lots as INSUFFICIENT evidence");
+
+// 10. Agent B: Cross-Signal Intelligence Agent Tests
+console.log("\n[10. Agent B: Cross-Signal Intelligence Agent Tests]");
+const crossA = runCrossSignalAgent(investA, supplierA);
+assert(crossA.status === "COMPLETED", "Agent B completes cross-signal analysis with status COMPLETED");
+assert(crossA.scenariosDetected.length >= 3, "Agent B detects at least 3 compound cross-signal scenarios on Supplier A");
+
+// Check the three primary scenarios specifically
+const csScenario1 = crossA.scenariosDetected.find(s => s.scenarioType === "QUALITY_BUFFER_CRITICALITY_CONVERGENCE");
+assert(csScenario1 !== undefined, "Agent B detects Scenario 1: High defect rate + critical part + low stock buffer");
+const csScenario2 = crossA.scenariosDetected.find(s => s.scenarioType === "COMMERCIAL_LEAKAGE_REPEATED_POS");
+assert(csScenario2 !== undefined, "Agent B detects Scenario 2: Unauthorized price variance + repeated POs");
+const csScenario3 = crossA.scenariosDetected.find(s => s.scenarioType === "COMPLIANCE_SOLE_SOURCE_CONVERGENCE");
+assert(csScenario3 !== undefined, "Agent B detects Scenario 3: Expiring compliance certificate + sole-source dependency");
+
+// Deduplication check
+const uniqueScenarioIds = new Set(crossA.scenariosDetected.map(s => s.scenarioId));
+assert(uniqueScenarioIds.size === crossA.scenariosDetected.length, "Agent B enforces deduplication with zero duplicate alert IDs");
+
+// 11. Agent C: Procurement Recommendation Agent Tests
+console.log("\n[11. Agent C: Procurement Recommendation Agent Tests]");
+const recsA = runProcurementRecommendationAgent(investA, crossA, supplierA);
+assert(recsA.status === "COMPLETED", "Agent C completes recommendations with status COMPLETED");
+assert(recsA.recommendations.length >= 3, "Agent C generates multiple actionable interventions");
+
+// Strict Human Approval Requirement check
+const allRequireHumanApproval = recsA.recommendations.every(r => r.requiresHumanApproval === true);
+assert(allRequireHumanApproval, "Agent C strictly enforces requiresHumanApproval = true on ALL recommendations");
+
+// Calculated impact metrics check
+const commRec = recsA.recommendations.find(r => r.category.includes("Commercial"));
+assert(commRec !== undefined, "Agent C generates commercial dispute recommendation");
+assert(commRec.expectedImpact?.calculable === true, "Commercial recommendation has calculable numeric impact");
+assert(commRec.expectedImpact?.numericMetric?.includes("74,000"), "Commercial impact explicitly references $74,000 cash recovery");
+
+// 12. Agent D: Decision Review Agent Tests
+console.log("\n[12. Agent D: Decision Review Agent Tests]");
+const reviewA = runDecisionReviewAgent(recsA, investA, crossA);
+assert(reviewA.status === "COMPLETED", "Agent D completes review with status COMPLETED");
+assert(reviewA.reviewedDecisions.length === recsA.recommendations.length, "Agent D reviews and audits all proposed recommendations");
+
+// Prioritization ranking check
+assert(reviewA.reviewedDecisions[0]?.rank === 1, "Agent D assigns Rank 1 to top priority action");
+const isSortedDescending = reviewA.reviewedDecisions.every((dec, i, arr) => i === 0 || arr[i - 1].auditScore >= dec.auditScore);
+assert(isSortedDescending, "Agent D strictly sorts decisions in descending order of audit score");
+assert(reviewA.highestUrgencyDecision !== null, "Agent D identifies highest urgency decision");
+assert(reviewA.reviewedDecisions[0]?.priorityRationale?.length > 10, "Agent D provides explainable priority rationale");
+assert(reviewA.reviewedDecisions[0]?.approvalStatus === "PENDING_EXECUTIVE_APPROVAL", "Agent D mandates PENDING_EXECUTIVE_APPROVAL");
+
+// 13. Deterministic Output for Identical Input Test
+console.log("\n[13. Deterministic Output & Reproducibility Tests]");
+const run1 = orchestrateSupplierDecision(supplierA);
+const run2 = orchestrateSupplierDecision(supplierA);
+// Compare the deterministic core structure (ignoring ephemeral timestamps and IDs)
+assert(run1.status === "COMPLETED" && run2.status === "COMPLETED", "Both orchestrations complete successfully");
+assert(run1.decisionReview.reviewedDecisions.length === run2.decisionReview.reviewedDecisions.length, "Identical number of decisions generated across runs");
+assert(run1.decisionReview.reviewedDecisions[0].title === run2.decisionReview.reviewedDecisions[0].title, "Identical Rank #1 decision selected across independent runs");
+assert(run1.decisionReview.reviewedDecisions[0].auditScore === run2.decisionReview.reviewedDecisions[0].auditScore, "Identical audit scores computed deterministically");
+
+// 14. End-to-End Decision Orchestrator Tests
+console.log("\n[14. End-to-End Decision Orchestrator Tests]");
+const singleOrch = orchestrateSupplierDecision(supplierA);
+assert(singleOrch.agentExecutionSummary.length === 4, "Orchestrator tracks execution across all 4 logical agents");
+assert(singleOrch.agentExecutionSummary.every(a => a.status === "COMPLETED"), "All 4 logical agents succeed in sequence");
+assert(singleOrch.topPriorityAction !== null, "Orchestrator exposes topPriorityAction in dossier");
+
+// Portfolio batch orchestration test
+const portfolioOrch = orchestrateAllSuppliers(SUPPLIERS);
+assert(portfolioOrch.totalSuppliersAnalyzed === SUPPLIERS.length, `Portfolio orchestrator processes all ${SUPPLIERS.length} suppliers`);
+assert(portfolioOrch.portfolioRankedDecisions.length >= SUPPLIERS.length, "Portfolio orchestrator builds consolidated ranked decision queue");
+assert(portfolioOrch.portfolioRankedDecisions[0]?.portfolioRank === 1, "Portfolio ranked decisions start at Rank 1");
+
 console.log("\n=======================================================");
 console.log(` Test Execution Summary: ${passedTests} Passed, ${failedTests} Failed`);
 console.log("=======================================================\n");

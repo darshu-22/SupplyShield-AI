@@ -13,6 +13,7 @@ import { SupplierAnalysisModal } from './components/suppliers/SupplierAnalysisMo
 import { EvidenceExplorerModal } from './components/evidence/EvidenceExplorerModal';
 import { RiskSimulatorModal } from './components/simulator/RiskSimulatorModal';
 import { MethodologyModal } from './components/methodology/MethodologyModal';
+import { AgentInvestigationReportModal } from './components/agentic/AgentInvestigationReportModal';
 import { LoadingState, ErrorBanner } from './components/common/StateViews';
 
 export function App() {
@@ -30,6 +31,7 @@ export function App() {
   const [analysingSupplier, setAnalysingSupplier] = useState(null);
   const [evidenceSupplier, setEvidenceSupplier] = useState(null);
   const [simulatorSupplier, setSimulatorSupplier] = useState(null);
+  const [agentReportSupplier, setAgentReportSupplier] = useState(null);
   const [isMethodologyOpen, setIsMethodologyOpen] = useState(false);
 
   // Layout & UI States
@@ -107,10 +109,10 @@ export function App() {
     triggerToast('Action draft archived as rejected.');
   };
 
-  // Queue a new decision from Analysis Modal
+  // Queue a new decision from Analysis Modal or Agent Recommendations
   const handleQueueDecision = (newAction) => {
     setDecisions(prev => [newAction, ...prev]);
-    triggerToast(`Intervention drafted for ${newAction.supplierCode} into Decisions pipeline.`);
+    triggerToast(`Intervention queued for ${newAction.supplierCode} into Decisions pipeline.`);
   };
 
   // Inspect Supplier by Code helper (used by Activity or Decisions view)
@@ -212,6 +214,8 @@ export function App() {
                   onAnalyseSupplier={setAnalysingSupplier}
                   onOpenEvidence={setEvidenceSupplier}
                   onOpenSimulator={setSimulatorSupplier}
+                  onOpenAgentReport={setAgentReportSupplier}
+                  onQueueDecision={handleQueueDecision}
                   currentRiskFilter={currentRiskFilter}
                   onSelectRiskFilter={setCurrentRiskFilter}
                   pendingActionsCount={pendingDecisionsCount}
@@ -269,6 +273,7 @@ export function App() {
           onOpenAnalysis={(supp) => setAnalysingSupplier(supp)}
           onOpenEvidence={(supp) => setEvidenceSupplier(supp)}
           onOpenSimulator={(supp) => setSimulatorSupplier(supp)}
+          onOpenAgentReport={(supp) => setAgentReportSupplier(supp)}
         />
       )}
 
@@ -304,6 +309,23 @@ export function App() {
             triggerToast(`Hypothetical simulation staged: "${plan.actionTitle}"`);
             setActiveTab('decisions');
           }}
+        />
+      )}
+
+      {/* Agent Investigation Report Dossier Modal */}
+      {agentReportSupplier && (
+        <AgentInvestigationReportModal 
+          supplier={agentReportSupplier}
+          onClose={() => setAgentReportSupplier(null)}
+          onOpenEvidence={(supp) => {
+            setAgentReportSupplier(null);
+            setEvidenceSupplier(supp);
+          }}
+          onOpenSimulator={(supp) => {
+            setAgentReportSupplier(null);
+            setSimulatorSupplier(supp);
+          }}
+          onQueueDecision={handleQueueDecision}
         />
       )}
 
