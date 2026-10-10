@@ -560,6 +560,42 @@ Real-world vendor spreadsheets often omit certain columns (e.g., certificate dat
 - **Persistence & Recovery**: Uploaded analysis is securely persisted in `localStorage` under `supplyshield_uploaded_dataset_v2`. Corrupted storage entries are detected and safely recovered without crashing.
 - **Clean Reset**: Users can clear or replace an uploaded dataset at any time via a confirmation modal, instantly returning to the demo dataset without data contamination.
 
+
+---
+
+## 9. Vercel Cloud Deployment & Serverless Architecture
+
+SupplyShield AI is production-ready for zero-configuration or standard deployment on **Vercel** with a unified SPA and Node.js Serverless Functions setup.
+
+### A. Vercel Architecture Overview
+- **Vite SPA Frontend**: Compiled into optimized static assets in `dist/` via `npm run build` and served at global edge CDN.
+- **Serverless API Backend**: The Express application in `server/app.js` is adapted to a Vercel Serverless Function entry point in `api/index.js` using Node.js runtime.
+- **Same-Domain Routing (`vercel.json`)**:
+  - All `/api/:path*` requests are routed transparently to `/api/index.js`.
+  - All non-API routes (`/(.*)`) fall back to `/index.html` for client-side React routing.
+  - No cross-origin setup or external backend URL configuration is required in the frontend.
+
+### B. Required Vercel Environment Variables
+Configure these in the Vercel Project Dashboard (**Settings -> Environment Variables**):
+
+| Variable | Required? | Default | Description |
+|---|---|---|---|
+| `ENABLE_GROQ` | No | `false` | Master safety switch. Set to `true` to enable Groq AI. Defaults to `false` (deterministic engine). |
+| `GROQ_API_KEY` | If Groq enabled | *(empty)* | Secret Groq API key from [console.groq.com/keys](https://console.groq.com/keys). Kept exclusively on serverless backend. |
+| `GROQ_MODEL` | No | `llama-3.3-70b-versatile` | Free-tier model identifier (`llama-3.3-70b-versatile` or `llama-3.1-8b-instant`). |
+| `GROQ_BASE_URL` | No | `https://api.groq.com/openai/v1` | Official Groq OpenAI-compatible base URL. |
+| `ALLOWED_ORIGIN` | No | *(auto-detected)* | Custom CORS origin if serving API to an external domain. Defaults to auto-permitting localhost and all `*.vercel.app` domains. |
+| `RATE_LIMIT_MAX_REQUESTS` | No | `20` | Max requests per minute per IP. |
+| `REQUEST_TIMEOUT_MS` | No | `20000` | Groq request timeout in milliseconds. |
+
+> [!IMPORTANT]
+> **Zero Frontend Secrets**: Never set `VITE_GROQ_API_KEY` or expose credentials to the browser. `GROQ_API_KEY` is read only by serverless functions on the backend.
+
+### C. Browser-Local vs Cloud Storage Disclosure
+- **Browser-Local Storage**: Supplier datasets (both uploaded and demo selections), staged procurement decisions, and governance audit trails are strictly persisted in the user's browser `localStorage` (`supplyshield_uploaded_dataset_v2`, `supplyshield_actions_v1`, `supplyshield_audit_v1`).
+- **Stateless Serverless Functions**: The Vercel backend functions are stateless compute handlers providing Groq AI proxying, request validation, and rate limiting.
+- **No Shared Database**: There is no remote central database (PostgreSQL, MongoDB) connecting users. Each user's uploaded supplier data remains strictly private to their browser session.
+
 ---
 
 ## 10. Automated Test Suite (`tests/run-tests.js`)
@@ -569,7 +605,7 @@ Run the test suite with:
 npm test
 ```
 
-The test runner executes **495 automated unit tests** across Phases 2, 3, 4, 6, 5, and the Real Supplier Data Import Engine:
+The test runner executes **519 automated unit tests** across Phases 2, 3, 4, 6, 5, Real Supplier Data Import, and Vercel Serverless Architecture:
 
 ```
 =======================================================
@@ -634,67 +670,33 @@ The test runner executes **495 automated unit tests** across Phases 2, 3, 4, 6, 
  SupplyShield AI — Real Supplier Data Import & Analysis
 =======================================================
 [38. CSV and Excel Parsing & Safety Limits] (8 tests)
-  ✓ PASS: Generates valid sample CSV template string
-  ✓ PASS: Parsed CSV contains 12 column headers & 6 rows
-  ✓ PASS: Generates valid binary OpenXML XLSX buffer & parses 6 rows
-  ✓ PASS: Safely rejects files exceeding 5 MB limit
-  ✓ PASS: Safely rejects unsupported file extensions & empty files
-  ✓ PASS: Exports analyzed suppliers to formatted CSV
-
 [39. Column Auto-Mapping & Alias Resolution] (8 tests)
-  ✓ PASS: Maps 'Company' alias to vendorName
-  ✓ PASS: Maps 'OTIF %' alias to deliveryPerformance
-  ✓ PASS: Maps 'Rejection Rate' alias to qualityDefectRate
-  ✓ PASS: Maps 'Price Variance Pct' alias to priceVariance
-  ✓ PASS: Maps 'Days of Supply' alias to stockCoverageDays
-  ✓ PASS: Maps 'Lead Time Days' alias to leadTimeDays
-  ✓ PASS: Maps 'Cert Expiry' alias to certificateDaysRemaining
-  ✓ PASS: Maps 'Sole Source' alias to singleSource
-
 [40. Data Validation & Numeric Boundaries] (5 tests)
-  ✓ PASS: Identifies valid and invalid rows
-  ✓ PASS: Detects duplicate vendor names
-  ✓ PASS: Flags missing vendorName required field
-  ✓ PASS: Flags out-of-bounds percentage boundaries (>100% / <0%)
-
 [41. Partial-Data Scoring Methodology & Uncertainty Buffers] (10 tests)
-  ✓ PASS: Full vendor achieves 100% data completeness (LOW risk)
-  ✓ PASS: Sparse vendor (<50% completeness) flags hasIncompleteData
-  ✓ PASS: Uncertainty buffer clamps sparse score to >= 35 (MEDIUM)
-  ✓ PASS: Sparse vendor is NEVER classified as LOW risk
-  ✓ PASS: Explicitly declares unmeasured missing dimensions
-  ✓ PASS: Score breakdown leaves unmeasured vectors null (zero fabrication)
-
 [42. Multi-Supplier Analysis & Adapter Tests (3+ Suppliers)] (7 tests)
-  ✓ PASS: Adapts 3 diverse suppliers to canonical entities
-  ✓ PASS: Correctly maps UPL-001 (LOW risk), UPL-002 (CRITICAL risk), UPL-003 (Incomplete)
-  ✓ PASS: Tags entities with uploaded dataset provenance
-  ✓ PASS: Generates actionable recommendations based on actual findings
-
 [43. Dataset Separation & Persistence] (8 tests)
-  ✓ PASS: Saves and loads uploaded dataset to localStorage with schema validation
-  ✓ PASS: Persists and toggles active dataset mode ('demo' vs 'uploaded')
-  ✓ PASS: Clears uploaded dataset and resets mode to 'demo'
-  ✓ PASS: Recovers gracefully from corrupted localStorage without throwing
-  ✓ PASS: Demo SUPPLIERS array remains exactly 6 suppliers (zero data mixing)
-
 [44. Assistant Queries on Active Uploaded Dataset] (10 tests)
-  ✓ PASS: Assistant identifies Zenith as highest risk in uploaded dataset
-  ✓ PASS: Answers explanation for Vendor 2 with verified observed facts
-  ✓ PASS: Routes to COMPARE_SUPPLIERS and compares OTIF & defect rates
-  ✓ PASS: Routes to NEXT_30_DAYS and flags 15-day cert & 14-day stock urgency
-  ✓ PASS: Routes to MISSING_DATA and explains uncertainty buffer policy
-  ✓ PASS: Routes to PRIORITY_ACTION targeting highest calculated risk
-  ✓ PASS: STRICT NON-MUTATION: Uploaded and demo scores remain identical
-
 [45. Recommendation Staging & Decision Center Governance] (4 tests)
-  ✓ PASS: Uploaded supplier generates actionable recommendation
-  ✓ PASS: Preserves mandatory human approval requirement
-  ✓ PASS: Links action to uploaded supplier ID and provenance
-  ✓ PASS: Stages action into PENDING_APPROVAL state
 
 =======================================================
- Test Execution Summary: 495 Passed, 0 Failed
+ SupplyShield AI — Vercel Deployment & Serverless Routing
+=======================================================
+[46. Vercel Deployment & Serverless API Routing Verification] (24 tests)
+  ✓ PASS: vercel.json configuration file exists
+  ✓ PASS: vercel.json specifies buildCommand: 'npm run build'
+  ✓ PASS: vercel.json specifies outputDirectory: 'dist'
+  ✓ PASS: vercel.json defines URL rewrites for /api/:path* and SPA
+  ✓ PASS: .gitignore explicitly excludes .vercel/
+  ✓ PASS: api/index.js exports default handler function and app
+  ✓ PASS: GET /api/health and /health return HTTP 200
+  ✓ PASS: GET /api and / return API directory endpoints
+  ✓ PASS: GET /api/assistant/status and /assistant/status return HTTP 200
+  ✓ PASS: POST /api/assistant/chat returns 403 when Groq disabled
+  ✓ PASS: Dynamic CORS permits localhost, *.vercel.app, and rejects malicious origins
+  ✓ PASS: Undefined API routes safely return HTTP 404
+
+=======================================================
+ Test Execution Summary: 519 Passed, 0 Failed
 =======================================================
 ```
 
@@ -706,7 +708,7 @@ The test runner executes **495 automated unit tests** across Phases 2, 3, 4, 6, 
 |---|---|
 | `npm run dev` | Starts Vite local development server at `http://localhost:5173` |
 | `npm run server` | Boots Node.js/Express backend on port `3001` (Groq AI proxy & status) |
-| `npm test` | Runs the 495-test suite verifying risk engine, agents, orchestrator, assistant, FSM, audit log, Groq AI, and real supplier data import |
+| `npm test` | Runs the 519-test suite verifying risk engine, agents, orchestrator, assistant, FSM, audit log, Groq AI, import, and Vercel serverless routing |
 | `npm run lint` | Runs `oxlint` across all project files (0 warnings, 0 errors) |
 | `npm run build` | Compiles production assets into `dist/` bundle |
 | `npm run preview` | Previews the production build locally |
@@ -721,13 +723,16 @@ SupplyShield AI/
 ├── package.json                 # Scripts: dev, server, build, lint, test
 ├── package-lock.json            # Deterministic dependency lockfile
 ├── vite.config.js               # Vite bundler configuration with /api proxy
+├── vercel.json                  # Vercel deployment routing (SPA + /api rewrites)
 ├── .oxlintrc.json               # Oxlint linter configuration
-├── .gitignore                   # Excludes node_modules, dist, .env, secrets/
+├── .gitignore                   # Excludes node_modules, dist, .env, secrets/, .vercel/
 ├── .env.example                 # Template environment variables (placeholders only)
 ├── README.md                    # Complete project documentation
-├── server/                      # Secure Node.js/Express Backend (Phase 5)
-│   ├── index.js                 # Server entry point & graceful shutdown
-│   ├── app.js                   # Express app factory, CORS, body limits & routes
+├── api/                         # Vercel Serverless Functions
+│   └── index.js                 # Serverless Function entry point exporting Express app
+├── server/                      # Secure Node.js/Express Backend (Phase 5 & Local Dev)
+│   ├── index.js                 # Server entry point for local standalone execution
+│   ├── app.js                   # Express app factory, dynamic CORS, dual-mount routes
 │   ├── config.js                # Environment config, safe status sanitization & defaults
 │   ├── middleware/
 │   │   ├── rateLimiter.js       # In-memory sliding window IP rate limiter (429)
@@ -738,7 +743,7 @@ SupplyShield AI/
 │   └── routes/
 │       └── assistantRoutes.js   # GET /api/assistant/status & POST /api/assistant/chat
 ├── tests/
-│   └── run-tests.js             # 495 automated unit tests across Phases 2, 3, 4, 6, 5 & Import
+│   └── run-tests.js             # 519 automated unit tests across Phases 2, 3, 4, 6, 5, Import & Vercel
 ├── src/
 │   ├── main.jsx                 # React root bootstrap
 │   ├── App.jsx                  # Main application orchestrator & active dataset routing
@@ -816,12 +821,87 @@ SupplyShield AI/
 
 - **Human Approval & Decision Support**: Approval of an action grants operational sign-off to proceed with an internal procurement intervention. It **never** claims that an external supplier was contacted or that a real-world enterprise ERP purchase order was altered without human initiation.
 - **Client-Side Privacy & Parsing**: All CSV and Excel files are parsed 100% locally in-browser using standard Web APIs, PapaParse, and OpenXML parsers. No raw spreadsheets or proprietary supplier records are transmitted to remote cloud databases or storage buckets.
+- **Stateless Serverless Compute**: The Vercel backend function (`api/index.js`) operates statelessly. There is no external database connecting users; all uploaded datasets, staged decisions, and audit events are stored locally in the user's browser `localStorage`.
 - **Authoritative Deterministic Risk Calculations**: Groq AI explains and interprets the results of the deterministic engine. It **never** computes or alters numerical risk scores, price variances, or safety stock figures. When Groq is enabled, only concise, sanitized supplier profiles are sent to the backend proxy—never raw spreadsheet files.
 - **Free-Tier Cost Protection**: Groq API integration is disabled by default (`ENABLE_GROQ=false`). Automated tests run 100% locally with zero live network calls to Groq Cloud. External AI calls require explicit configuration of API keys and billing controls by the user.
 - **Strict Dataset Isolation**: Demonstration and Uploaded datasets never mix. The top header dataset switcher toggles context across the entire application instantly. Uploaded datasets can be cleared or replaced at any time with a clean reset confirmation.
 - **Partial-Data Scoring Policy**: The engine penalizes data gaps with uncertainty buffers (clamping completeness <50% to $\ge 35$ / MEDIUM). Missing information is never fabricated, and unmeasured vectors are reported transparently.
 - **Demonstration Audit Log**: The audit trail is an append-only in-browser governance log persisted in browser `localStorage`. It demonstrates tamper-proof audit concepts but is not a cryptographic distributed ledger or backend compliance vault.
 - **Session State & Persistence**: Action records, audit entries, and uploaded datasets persist across browser reloads via `localStorage` and can be reset at any time via the **"Reset Seeds"** control.
+                # Action Lifecycle, Audit & Persistence (Phase 6)
+│   │   ├── actionLifecycleService.js # Finite-state machine, transitions & validators
+│   │   ├── auditService.js      # Append-only immutable audit trail logger
+│   │   └── persistenceService.js# LocalStorage serialization, validation & recovery
+│   ├── assistant/               # AI Procurement Assistant & What-If Engine (Phase 4 & 5)
+│   │   ├── assistantService.js  # Authoritative deterministic query orchestrator
+│   │   ├── groqAssistantService.js # Frontend Groq bridge, status polling & fallback
+│   │   ├── intentRouter.js      # NLP tokenized router, entity recognizer, and parser
+│   │   └── scenarioService.js   # Deterministic copy-on-write what-if simulation service
+│   ├── agents/                  # Multi-agent decision engine (Phase 3)
+│   │   ├── riskInvestigationAgent.js       # Agent A: Transaction & evidence auditor
+│   │   ├── crossSignalAgent.js             # Agent B: Multi-vector convergence detector
+│   │   ├── procurementRecommendationAgent.js # Agent C: Actionable intervention designer
+│   │   ├── decisionReviewAgent.js          # Agent D: Priority auditor & governance gate
+│   │   └── decisionOrchestrator.js         # Central coordinator & portfolio ranker
+│   ├── engine/
+│   │   └── riskEngine.js        # Pure deterministic multi-vector calculation engine
+│   ├── data/
+│   │   ├── transactionRecords.js# Relational tables: POs, dock inspections, certs, inventory
+│   │   └── suppliers.js         # Compiled suppliers with linked records & decisions
+│   └── components/
+│       ├── common/
+│       │   ├── Badge.jsx        # RiskBadge, CertificateBadge, CriticalityBadge
+│       │   └── StateViews.jsx   # LoadingState, EmptyState, ErrorBanner
+│       ├── layout/
+│       │   ├── Header.jsx       # Header with search, dataset toggle, methodology, notifications
+│       │   ├── Sidebar.jsx      # Navigation sidebar with Import & Analyze tab
+│       │   └── NotificationDropdown.jsx # Header notification popover
+│       ├── dashboard/
+│       │   ├── SummaryCards.jsx # Calculated KPI cards (Overpayment, Lead-Time Deficits)
+│       │   └── RiskDistribution.jsx # Risk breakdown bar & dynamic highest-risk spotlight
+│       ├── import/              # Import & Analysis Components
+│       │   └── SupplierAnalysisReportModal.jsx # Deep 5-vector analysis report modal
+│       ├── agentic/             # Agentic UI components (Phase 3)
+│       │   ├── AgenticIntelligenceSection.jsx   # Overview dashboard intelligence section
+│       │   └── AgentInvestigationReportModal.jsx# Comprehensive supplier decision dossier
+│       ├── assistant/           # Assistant UI components (Phase 4 & 5)
+│       │   └── AssistantView.jsx# Assistant chat interface with Groq indicator & dataset badge
+│       ├── decisions/           # Action Lifecycle UI components (Phase 6)
+│       │   ├── ActionDetailModal.jsx      # Detailed dossier & visual audit timeline modal
+│       │   └── TransitionReasonModal.jsx  # Rejection & cancellation rationale dialog
+│       ├── suppliers/
+│       │   ├── SupplierTable.jsx       # Table with lead-time gap and action triggers
+│       │   ├── SupplierDetailModal.jsx # Detail drawer with agent dossier launcher
+│       │   └── SupplierAnalysisModal.jsx # Diagnostic modal with action drafting
+│       ├── evidence/
+│       │   └── EvidenceExplorerModal.jsx # 5-tab granular audit trail modal
+│       ├── simulator/
+│       │   └── RiskSimulatorModal.jsx    # Interactive What-If sensitivity simulator
+│       ├── methodology/
+│       │   └── MethodologyModal.jsx      # Scoring equations and weights modal
+│       └── views/
+│           ├── OverviewView.jsx     # Executive command dashboard with Agentic Section
+│           ├── ImportAnalyzeView.jsx# 4-step vendor import, mapping, validation & results view
+│           ├── SuppliersView.jsx    # Master supplier directory with dynamic catalog metrics
+│           ├── RiskAnalysisView.jsx # Multi-vector risk view with Cross-Signal cards
+│           ├── DecisionsView.jsx    # Upgraded Procurement Decision Center & Audit Log
+│           └── ActivityView.jsx     # Governance audit stream & telemetry event log
+```
+
+---
+
+## 13. Current Limitations & Architecture Disclaimers
+
+- **Human Approval & Decision Support**: Approval of an action grants operational sign-off to proceed with an internal procurement intervention. It **never** claims that an external supplier was contacted or that a real-world enterprise ERP purchase order was altered without human initiation.
+- **Client-Side Privacy & Parsing**: All CSV and Excel files are parsed 100% locally in-browser using standard Web APIs, PapaParse, and OpenXML parsers. No raw spreadsheets or proprietary supplier records are transmitted to remote cloud databases or storage buckets.
+- **Stateless Serverless Compute**: The Vercel backend function (`api/index.js`) operates statelessly. There is no external database connecting users; all uploaded datasets, staged decisions, and audit events are stored locally in the user's browser `localStorage`.
+- **Authoritative Deterministic Risk Calculations**: Groq AI explains and interprets the results of the deterministic engine. It **never** computes or alters numerical risk scores, price variances, or safety stock figures. When Groq is enabled, only concise, sanitized supplier profiles are sent to the backend proxy—never raw spreadsheet files.
+- **Free-Tier Cost Protection**: Groq API integration is disabled by default (`ENABLE_GROQ=false`). Automated tests run 100% locally with zero live network calls to Groq Cloud. External AI calls require explicit configuration of API keys and billing controls by the user.
+- **Strict Dataset Isolation**: Demonstration and Uploaded datasets never mix. The top header dataset switcher toggles context across the entire application instantly. Uploaded datasets can be cleared or replaced at any time with a clean reset confirmation.
+- **Partial-Data Scoring Policy**: The engine penalizes data gaps with uncertainty buffers (clamping completeness <50% to $\ge 35$ / MEDIUM). Missing information is never fabricated, and unmeasured vectors are reported transparently.
+- **Demonstration Audit Log**: The audit trail is an append-only in-browser governance log persisted in browser `localStorage`. It demonstrates tamper-proof audit concepts but is not a cryptographic distributed ledger or backend compliance vault.
+- **Session State & Persistence**: Action records, audit entries, and uploaded datasets persist across browser reloads via `localStorage` and can be reset at any time via the **"Reset Seeds"** control.
+
 
 
 

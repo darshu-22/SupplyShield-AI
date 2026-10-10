@@ -1278,6 +1278,104 @@ assert(stagedUploadedAction.requiresHumanApproval === true, "Preserves mandatory
 assert(stagedUploadedAction.supplierId === "UPL-002", "Links action to uploaded supplier ID");
 assert(stagedUploadedAction.status === "PENDING_APPROVAL", "Stages action into initial PENDING_APPROVAL state");
 
+// 46. Vercel Deployment & Serverless API Routing Verification
+console.log("\n[46. Vercel Deployment & Serverless API Routing Verification]");
+
+// 1. Verify vercel.json structure and security
+const vercelConfigPath = path.resolve('vercel.json');
+assert(fs.existsSync(vercelConfigPath), "vercel.json configuration file exists");
+const vercelConfig = JSON.parse(fs.readFileSync(vercelConfigPath, 'utf8'));
+assert(vercelConfig.buildCommand === "npm run build", "vercel.json specifies buildCommand: 'npm run build'");
+assert(vercelConfig.outputDirectory === "dist", "vercel.json specifies outputDirectory: 'dist'");
+assert(Array.isArray(vercelConfig.rewrites) && vercelConfig.rewrites.length >= 2, "vercel.json defines URL rewrites");
+assert(vercelConfig.rewrites[0].source === "/api/:path*" && vercelConfig.rewrites[0].destination === "/api/index.js", "Routes /api/:path* to /api/index.js");
+assert(vercelConfig.rewrites[1].source === "/(.*)" && vercelConfig.rewrites[1].destination === "/index.html", "Routes SPA fallback to /index.html");
+
+// Verify .gitignore protects .vercel
+const updatedGitignore = fs.readFileSync(path.resolve('.gitignore'), 'utf8');
+assert(updatedGitignore.includes(".vercel/"), ".gitignore explicitly excludes .vercel/");
+
+// 2. Verify api/index.js Vercel entrypoint
+const { default: vercelHandler, app: vercelExpressApp } = await import('../api/index.js');
+assert(typeof vercelHandler === "function", "api/index.js exports default handler function");
+assert(typeof vercelExpressApp === "function", "api/index.js exports Express app instance");
+
+// 3. Test HTTP routing on ephemeral test server
+const ephemeralServer = await new Promise((resolve) => {
+  const s = vercelExpressApp.listen(0, '127.0.0.1', () => resolve(s));
+});
+const ephemeralPort = ephemeralServer.address().port;
+const apiBase = `http://127.0.0.1:${ephemeralPort}`;
+
+try {
+  // Test GET /api/health
+  const resApiHealth = await fetch(`${apiBase}/api/health`);
+  assert(resApiHealth.status === 200, "GET /api/health returns HTTP 200");
+  const dataApiHealth = await resApiHealth.json();
+  assert(dataApiHealth.status === "healthy", "GET /api/health reports status: 'healthy'");
+
+  // Test GET /health (supports path-stripped routing)
+  const resHealth = await fetch(`${apiBase}/health`);
+  assert(resHealth.status === 200, "GET /health (path-stripped) returns HTTP 200");
+
+  // Test GET /api (API root)
+  const resApiRoot = await fetch(`${apiBase}/api`);
+  assert(resApiRoot.status === 200, "GET /api returns HTTP 200");
+  const dataApiRoot = await resApiRoot.json();
+  assert(Array.isArray(dataApiRoot.endpoints), "GET /api returns available endpoints array");
+
+  // Test GET /api/assistant/status
+  const resStatus = await fetch(`${apiBase}/api/assistant/status`);
+  assert(resStatus.status === 200, "GET /api/assistant/status returns HTTP 200");
+  const dataStatus = await resStatus.json();
+  assert(dataStatus.enabled === false, "GET /api/assistant/status reports enabled: false by default");
+  assert(dataStatus.provider === "deterministic-local", "GET /api/assistant/status defaults to deterministic-local");
+
+  // Test GET /assistant/status (dual mount)
+  const resStatusStripped = await fetch(`${apiBase}/assistant/status`);
+  assert(resStatusStripped.status === 200, "GET /assistant/status returns HTTP 200");
+
+  // Test POST /api/assistant/chat when disabled (returns 403)
+  const resChatDisabled = await fetch(`${apiBase}/api/assistant/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'Hello' })
+  });
+  assert(resChatDisabled.status === 403, "POST /api/assistant/chat returns 403 when disabled");
+
+  // Test CORS resolution
+  const resCorsLocal = await fetch(`${apiBase}/api/health`, {
+    headers: { 'Origin': 'http://localhost:5173' }
+  });
+  assert(resCorsLocal.headers.get('access-control-allow-origin') === 'http://localhost:5173', "CORS allows localhost:5173");
+
+  const resCorsVercel = await fetch(`${apiBase}/api/health`, {
+    headers: { 'Origin': 'https://supplyshield-ai.vercel.app' }
+  });
+  assert(resCorsVercel.headers.get('access-control-allow-origin') === 'https://supplyshield-ai.vercel.app', "CORS allows *.vercel.app production domain");
+
+  const resCorsVercelPreview = await fetch(`${apiBase}/api/health`, {
+    headers: { 'Origin': 'https://supplyshield-ai-git-preview-user.vercel.app' }
+  });
+  assert(resCorsVercelPreview.headers.get('access-control-allow-origin') === 'https://supplyshield-ai-git-preview-user.vercel.app', "CORS allows *.vercel.app preview domain");
+
+  const resCorsMalicious = await fetch(`${apiBase}/api/health`, {
+    headers: { 'Origin': 'https://unauthorized-malicious-site.com' }
+  });
+  assert(resCorsMalicious.headers.get('access-control-allow-origin') === null, "CORS rejects unauthorized third-party origin");
+
+  // Test 404 for undefined endpoints
+  const res404 = await fetch(`${apiBase}/api/nonexistent`);
+  assert(res404.status === 404, "Undefined endpoint returns HTTP 404");
+
+} finally {
+  if (typeof ephemeralServer.closeAllConnections === "function") {
+    ephemeralServer.closeAllConnections();
+  }
+  await new Promise((resolve) => ephemeralServer.close(resolve));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
 console.log("\n=======================================================");
 console.log(` Test Execution Summary: ${passedTests} Passed, ${failedTests} Failed`);
 console.log("=======================================================\n");
@@ -1287,6 +1385,8 @@ if (failedTests > 0) {
 } else {
   process.exit(0);
 }
+
+
 
 
 
