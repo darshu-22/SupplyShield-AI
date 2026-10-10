@@ -28,12 +28,17 @@ export function SummaryCards({
     maximumFractionDigits: 0
   }).format(totalQuarterlyOverpayment);
 
+  const soleSourceNames = soleSourceSuppliers.map(s => s.shortName || s.name).slice(0, 2).join(', ');
+  const soleSourceSubtitle = soleSourceSuppliers.length > 0
+    ? `${soleSourceSuppliers.length} single-source (${soleSourceNames}${soleSourceSuppliers.length > 2 ? '...' : ''})`
+    : '0 sole-source dependencies';
+
   const cards = [
     {
       id: 'total-suppliers',
       title: 'Monitored Suppliers',
       value: totalSuppliers,
-      subtitle: `${soleSourceSuppliers.length} single-source sole provider (Apex)`,
+      subtitle: soleSourceSubtitle,
       icon: Building2,
       accentColor: 'var(--teal-primary)',
       bgTint: 'rgba(14, 165, 233, 0.08)',

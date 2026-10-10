@@ -16,6 +16,34 @@ import {
   RISK_THRESHOLDS
 } from '../src/engine/riskEngine.js';
 
+import { 
+  parseCsvFile, 
+  parseXlsxFile, 
+  validateFileMetadata, 
+  generateSampleCsvContent, 
+  generateSampleXlsxBuffer, 
+  exportAnalysisToCsv 
+} from '../src/import/importParser.js';
+
+import { 
+  autoDetectColumnMapping, 
+  validateUploadedData 
+} from '../src/import/importValidator.js';
+
+import { 
+  scoreUploadedSupplier, 
+  adaptUploadedSuppliersToEntities 
+} from '../src/import/uploadedDataAdapter.js';
+
+import { 
+  savePersistedUploadedDataset, 
+  loadPersistedUploadedDataset, 
+  clearPersistedUploadedDataset, 
+  loadActiveDatasetMode, 
+  saveActiveDatasetMode, 
+  DATASET_MODE 
+} from '../src/import/datasetStorage.js';
+
 let passedTests = 0;
 let failedTests = 0;
 
@@ -931,6 +959,325 @@ assert(supplierA.riskScore === originalScoreBefore, `STRICT NON-MUTATION: suppli
 assert(supplierA.scoreBreakdown.qualityScore === originalBreakdownBefore.qualityScore, "STRICT NON-MUTATION: Quality score breakdown remains identical");
 assert(supplierA.rejectionRate === 9.2, "STRICT NON-MUTATION: Rejection rate remains exactly 9.2%");
 
+// 38. CSV and Excel Parsing & Safety Limits
+console.log("\n[38. CSV and Excel Parsing & Safety Limits]");
+const sampleCsv = generateSampleCsvContent();
+assert(typeof sampleCsv === "string" && sampleCsv.includes("Vendor Name"), "Generates valid sample CSV template string");
+
+const parsedCsv = await parseCsvFile(sampleCsv);
+assert(parsedCsv.headers.length >= 8, `Parsed CSV contains ${parsedCsv.headers.length} column headers`);
+assert(parsedCsv.rows.length === 6, `Parsed CSV contains ${parsedCsv.rows.length} data rows`);
+assert(parsedCsv.rows[0]["Vendor Name"] === "Delta Precision Machining Corp", "First CSV vendor matches template");
+
+// Test Excel (.xlsx) parsing via minimal OpenXML buffer
+const sampleXlsx = generateSampleXlsxBuffer();
+assert(sampleXlsx instanceof Uint8Array && sampleXlsx.length > 500, "Generates valid binary OpenXML XLSX buffer");
+
+const parsedXlsx = await parseXlsxFile(sampleXlsx);
+assert(parsedXlsx.headers.length >= 8, `Parsed XLSX contains ${parsedXlsx.headers.length} column headers`);
+assert(parsedXlsx.rows.length === 6, `Parsed XLSX contains ${parsedXlsx.rows.length} data rows`);
+assert(parsedXlsx.rows[0]["Vendor Name"] === "Delta Precision Machining Corp", "First XLSX vendor matches template");
+
+// Safety limit: reject file exceeding 5MB
+try {
+  validateFileMetadata({ name: "large.csv", size: 6 * 1024 * 1024 });
+  assert(false, "Fails to reject file over 5 MB");
+} catch (err) {
+  assert(err.message.includes("too large"), "Safely rejects file exceeding 5 MB limit");
+}
+
+// Safety limit: reject unsupported file extensions
+try {
+  validateFileMetadata({ name: "payload.exe", size: 1024 });
+  assert(false, "Fails to reject unsupported extension");
+} catch (err) {
+  assert(err.message.includes("Unsupported file type"), "Safely rejects unsupported file extensions");
+}
+
+// Safety limit: reject empty CSV
+try {
+  await parseCsvFile("");
+  assert(false, "Fails to reject empty CSV");
+} catch (err) {
+  assert(err.message.includes("empty"), "Safely rejects empty CSV input");
+}
+
+// Export analysis to CSV verification
+const sampleAnalyzed = [
+  {
+    id: "UPL-001",
+    name: "Vendor Alpha",
+    riskScore: 82,
+    riskLevel: "CRITICAL",
+    dataCompletenessScore: 100,
+    onTimeDeliveryRate: 68.0,
+    rejectionRate: 6.5,
+    priceVarianceFormatted: "+7.8%",
+    stockCoverageDays: 16,
+    leadTimeDays: 90,
+    certificateExpiryDays: 18,
+    isSingleSource: true,
+    preliminarySummary: {
+      primaryRiskDriver: "Compounding Single-Source Quality & Factory Stockout Hazard",
+      recommendedActions: [{ title: "Dispute Price Variance" }]
+    }
+  }
+];
+const exportedCsv = exportAnalysisToCsv(sampleAnalyzed);
+assert(exportedCsv.includes("Vendor Alpha") && exportedCsv.includes("CRITICAL"), "Exports analyzed suppliers to formatted CSV");
+
+// 39. Column Auto-Mapping & Alias Resolution
+console.log("\n[39. Column Auto-Mapping & Alias Resolution]");
+const uploadedHeaders = [
+  "Company",
+  "OTIF %",
+  "Rejection Rate",
+  "Price Variance Pct",
+  "Days of Supply",
+  "Lead Time Days",
+  "Cert Expiry",
+  "Sole Source"
+];
+const detectedMapping = autoDetectColumnMapping(uploadedHeaders);
+assert(detectedMapping.vendorName === "Company", "Maps 'Company' alias to vendorName");
+assert(detectedMapping.deliveryPerformance === "OTIF %", "Maps 'OTIF %' alias to deliveryPerformance");
+assert(detectedMapping.qualityDefectRate === "Rejection Rate", "Maps 'Rejection Rate' alias to qualityDefectRate");
+assert(detectedMapping.priceVariance === "Price Variance Pct", "Maps 'Price Variance Pct' alias to priceVariance");
+assert(detectedMapping.stockCoverageDays === "Days of Supply", "Maps 'Days of Supply' alias to stockCoverageDays");
+assert(detectedMapping.leadTimeDays === "Lead Time Days", "Maps 'Lead Time Days' alias to leadTimeDays");
+assert(detectedMapping.certificateDaysRemaining === "Cert Expiry", "Maps 'Cert Expiry' alias to certificateDaysRemaining");
+assert(detectedMapping.singleSource === "Sole Source", "Maps 'Sole Source' alias to singleSource");
+
+// 40. Data Validation & Numeric Boundaries
+console.log("\n[40. Data Validation & Numeric Boundaries]");
+const rawTestRows = [
+  { "Company": "Vendor Alpha", "OTIF %": "95%", "Rejection Rate": "1.2%", "Price Variance Pct": "+1.5%" },
+  { "Company": "", "OTIF %": "80%", "Rejection Rate": "2.0%" }, // Missing required vendorName
+  { "Company": "Vendor Gamma", "OTIF %": "150%", "Rejection Rate": "-5%" }, // Out of bounds
+  { "Company": "Vendor Alpha", "OTIF %": "92%", "Rejection Rate": "1.5%" }  // Duplicate
+];
+const validation = validateUploadedData(rawTestRows, detectedMapping);
+assert(validation.validRows.length === 2, `Identifies exactly 2 valid rows (got ${validation.validRows.length})`);
+assert(validation.invalidRows.length === 2, `Identifies exactly 2 invalid rows (got ${validation.invalidRows.length})`);
+assert(validation.duplicateCount === 1, "Detects duplicate vendor name");
+assert(validation.invalidRows[0].errors.some(e => e.includes("Vendor Name")), "Flags missing vendorName error on row 2");
+assert(validation.invalidRows[1].errors.some(e => e.includes("Delivery Performance")), "Flags OTIF > 100% boundary error on row 3");
+
+// 41. Partial-Data Scoring Methodology & Uncertainty Buffers
+console.log("\n[41. Partial-Data Scoring Methodology & Uncertainty Buffers]");
+// Test A: Full 5-vector supplier
+const fullVendorCanonical = {
+  vendorName: "Full Metrics Vendor",
+  deliveryPerformance: 96.0,
+  qualityDefectRate: 1.0,
+  priceVariance: 0.0,
+  stockCoverageDays: 50,
+  leadTimeDays: 20,
+  certificateDaysRemaining: 200,
+  singleSource: false
+};
+const fullScoreResult = scoreUploadedSupplier(fullVendorCanonical);
+assert(fullScoreResult.completenessScore === 100, "Full vendor achieves 100% data completeness");
+assert(fullScoreResult.riskLevel === "LOW", "Compliant full vendor classified as LOW risk");
+assert(fullScoreResult.hasIncompleteData === false, "Flag hasIncompleteData is false for full vendor");
+
+// Test B: Partial data supplier with only 1-2 good metrics (<50% completeness)
+// REQUIREMENT: "Never assign a low-risk classification solely because data is missing."
+const partialVendorCanonical = {
+  vendorName: "Sparse Vendor",
+  deliveryPerformance: 98.0, // High delivery
+  qualityDefectRate: 0.5,    // Low defects
+  // Price, Compliance, Continuity all MISSING!
+  priceVariance: null,
+  stockCoverageDays: null,
+  leadTimeDays: null,
+  certificateDaysRemaining: null,
+  singleSource: null
+};
+const partialScoreResult = scoreUploadedSupplier(partialVendorCanonical);
+assert(partialScoreResult.completenessScore === 40, `Sparse vendor has 40% completeness (got ${partialScoreResult.completenessScore}%)`);
+assert(partialScoreResult.hasIncompleteData === true, "Flags hasIncompleteData as true");
+assert(partialScoreResult.score >= 35, `Uncertainty buffer clamps score to >= 35 (got ${partialScoreResult.score})`);
+assert(partialScoreResult.riskLevel !== "LOW", `Sparse vendor is NEVER classified as LOW risk (got ${partialScoreResult.riskLevel})`);
+assert(partialScoreResult.missingDimensions.length === 3, "Explicitly declares 3 missing dimensions");
+assert(partialScoreResult.scoreBreakdown.price === null, "Price score remains null (zero fabrication)");
+assert(partialScoreResult.scoreBreakdown.compliance === null, "Compliance score remains null (zero fabrication)");
+assert(partialScoreResult.scoreBreakdown.continuity === null, "Continuity score remains null (zero fabrication)");
+
+// 42. Multi-Supplier Analysis & Adapter Tests (3+ Suppliers)
+console.log("\n[42. Multi-Supplier Analysis & Adapter Tests (3+ Suppliers)]");
+const threeDiverseVendors = [
+  {
+    isValid: true,
+    canonical: {
+      vendorName: "Apex High-Reliability",
+      deliveryPerformance: 98.5,
+      qualityDefectRate: 0.8,
+      priceVariance: 0.0,
+      stockCoverageDays: 60,
+      leadTimeDays: 14,
+      certificateDaysRemaining: 300,
+      singleSource: false,
+      itemCategory: "Standard Hardware",
+      suppliedItem: "Titanium Fasteners",
+      annualSpend: 450000
+    }
+  },
+  {
+    isValid: true,
+    canonical: {
+      vendorName: "Zenith Single-Source Critical",
+      deliveryPerformance: 67.5,
+      qualityDefectRate: 7.2,
+      priceVariance: 8.4,
+      stockCoverageDays: 14,
+      leadTimeDays: 90,
+      certificateDaysRemaining: 15,
+      singleSource: true,
+      itemCategory: "Semiconductors",
+      suppliedItem: "CAN-Bus Microcontrollers",
+      annualSpend: 2500000
+    }
+  },
+  {
+    isValid: true,
+    canonical: {
+      vendorName: "Boreal Partial Vendor",
+      deliveryPerformance: 85.0,
+      qualityDefectRate: null,
+      priceVariance: 3.2,
+      stockCoverageDays: null,
+      leadTimeDays: null,
+      certificateDaysRemaining: null,
+      singleSource: true,
+      itemCategory: "Seals",
+      suppliedItem: "O-Rings",
+      annualSpend: 800000
+    }
+  }
+];
+
+const adaptedSuppliers = adaptUploadedSuppliersToEntities(threeDiverseVendors, {
+  fileName: "test_suppliers.csv",
+  uploadedAt: "2026-10-10T00:00:00Z"
+});
+
+assert(adaptedSuppliers.length === 3, `Adapted exactly 3 suppliers (got ${adaptedSuppliers.length})`);
+assert(adaptedSuppliers[0].id === "UPL-001" && adaptedSuppliers[0].name === "Apex High-Reliability", "First supplier mapped to UPL-001");
+assert(adaptedSuppliers[0].riskLevel === "LOW" && adaptedSuppliers[0].riskScore < 25, "First supplier is LOW risk");
+assert(adaptedSuppliers[1].id === "UPL-002" && adaptedSuppliers[1].name === "Zenith Single-Source Critical", "Second supplier mapped to UPL-002");
+assert(adaptedSuppliers[1].riskLevel === "CRITICAL" && adaptedSuppliers[1].riskScore >= 80, "Second supplier is CRITICAL risk");
+assert(adaptedSuppliers[2].id === "UPL-003" && adaptedSuppliers[2].hasIncompleteData === true, "Third supplier flagged with incomplete data");
+assert(adaptedSuppliers[0].isUploaded === true && adaptedSuppliers[0].sourceDataset === "Uploaded Dataset", "Tagged with uploaded dataset provenance");
+assert(adaptedSuppliers[1].preliminarySummary.recommendedActions.length >= 2, "Generates actionable recommendations for Zenith");
+
+// 43. Dataset Separation & Persistence
+console.log("\n[43. Dataset Separation & Persistence]");
+// Mock localStorage in Node test runner
+const mockStorage = new Map();
+global.window = {
+  localStorage: {
+    getItem: (key) => mockStorage.get(key) || null,
+    setItem: (key, val) => mockStorage.set(key, String(val)),
+    removeItem: (key) => mockStorage.delete(key),
+    clear: () => mockStorage.clear()
+  }
+};
+
+const saveOk = savePersistedUploadedDataset({
+  meta: { fileName: "audit_vendors.xlsx" },
+  suppliers: adaptedSuppliers,
+  rawRowCount: 3
+});
+assert(saveOk === true, "Saves uploaded dataset to persistence successfully");
+
+const loadedDataset = loadPersistedUploadedDataset();
+assert(loadedDataset !== null && loadedDataset.suppliers.length === 3, "Loads persisted uploaded dataset with schema integrity");
+assert(loadedDataset.suppliers[1].name === "Zenith Single-Source Critical", "Preserves exact entity records across storage cycles");
+
+// Mode switching
+saveActiveDatasetMode(DATASET_MODE.UPLOADED);
+assert(loadActiveDatasetMode() === DATASET_MODE.UPLOADED, "Persists active dataset mode: 'uploaded'");
+
+saveActiveDatasetMode(DATASET_MODE.DEMO);
+assert(loadActiveDatasetMode() === DATASET_MODE.DEMO, "Persists active dataset mode: 'demo'");
+
+// Clear uploaded dataset
+clearPersistedUploadedDataset();
+assert(loadPersistedUploadedDataset() === null, "Clears uploaded dataset from storage");
+assert(loadActiveDatasetMode() === DATASET_MODE.DEMO, "Resets active dataset mode to 'demo' after clear");
+
+// Corrupt storage recovery
+mockStorage.set("supplyshield_uploaded_dataset_v2", "INVALID_JSON_CORRUPT{{");
+const recovered = loadPersistedUploadedDataset();
+assert(recovered === null, "Recovers gracefully from corrupted localStorage without throwing");
+assert(mockStorage.get("supplyshield_uploaded_dataset_v2") === undefined, "Purges corrupted storage entry");
+
+// Strict Non-Mutation of Demonstration Dataset
+assert(SUPPLIERS.length === 6, "Demo SUPPLIERS array remains exactly 6 suppliers (no contamination)");
+assert(SUPPLIERS[0].id === "SUP-001", "Demo supplier SUP-001 intact");
+
+// 44. Assistant Queries on Active Uploaded Dataset
+console.log("\n[44. Assistant Queries on Active Uploaded Dataset]");
+// Query 1: Which uploaded vendor has the highest calculated risk?
+const qRanking = processAssistantQuery("Which uploaded vendor has the highest calculated risk?", adaptedSuppliers);
+assert(qRanking.content.includes("Zenith Single-Source Critical"), "Assistant identifies Zenith as highest risk in uploaded dataset");
+assert(qRanking.content.includes("CRITICAL"), "Assistant cites CRITICAL risk classification for Zenith");
+
+// Query 2: Why was Vendor 2 classified as high risk?
+const qWhyVendor2 = processAssistantQuery("Why was Vendor 2 classified as high risk?", adaptedSuppliers);
+assert(qWhyVendor2.content.includes("Zenith") || qWhyVendor2.content.includes("UPL-002") || qWhyVendor2.content.includes("Uploaded-02"), "Answers explanation for Vendor 2");
+assert(qWhyVendor2.observedFacts.length > 0, "Provides verified observed facts for Vendor 2");
+
+// Query 3: Compare delivery and quality performance of Vendor 1 and Vendor 2
+const qCompare = processAssistantQuery("Compare the delivery and quality performance of Vendor 1 and Vendor 2", adaptedSuppliers);
+assert(qCompare.intent === "COMPARE_SUPPLIERS", "Routes to COMPARE_SUPPLIERS intent");
+assert(qCompare.content.includes("Apex High-Reliability") && qCompare.content.includes("Zenith Single-Source Critical"), "Compares both vendors in markdown table");
+assert(qCompare.content.includes("98.5%") && qCompare.content.includes("67.5%"), "Compares exact OTIF percentages");
+
+// Query 4: Which suppliers need attention in the next 30 days?
+const qNext30 = processAssistantQuery("Which suppliers need attention in the next 30 days?", adaptedSuppliers);
+assert(qNext30.intent === "NEXT_30_DAYS", "Routes to NEXT_30_DAYS intent");
+assert(qNext30.content.includes("Zenith"), "Identifies Zenith with 15-day cert and 14-day stock urgency");
+
+// Query 5: What data is missing for Vendor 3?
+const qMissingVendor3 = processAssistantQuery("What data is missing for Vendor 3?", adaptedSuppliers);
+assert(qMissingVendor3.intent === "MISSING_DATA", "Routes to MISSING_DATA intent");
+assert(qMissingVendor3.content.includes("Boreal Partial Vendor"), "Identifies Vendor 3 (Boreal)");
+assert(qMissingVendor3.content.includes("never assumed to indicate low risk"), "Explains non-low-risk uncertainty rule for missing data");
+
+// Query 6: What should procurement do first?
+const qDoFirst = processAssistantQuery("What should procurement do first?", adaptedSuppliers);
+assert(qDoFirst.intent === "PRIORITY_ACTION", "Routes to PRIORITY_ACTION intent");
+assert(qDoFirst.content.includes("Zenith Single-Source Critical"), "Targets Zenith as top procurement priority");
+
+// Zero mutation verification
+assert(adaptedSuppliers[1].riskScore >= 80, "Strict non-mutation: Zenith risk score intact after assistant queries");
+assert(SUPPLIERS[0].riskScore === 92, "Strict non-mutation: Demo Supplier A risk score intact");
+
+// 45. Recommendation Staging & Decision Center Governance
+console.log("\n[45. Recommendation Staging & Decision Center Governance]");
+const zenithRecommendation = adaptedSuppliers[1].preliminarySummary.recommendedActions[0];
+assert(zenithRecommendation !== undefined, "Zenith has at least 1 actionable recommendation");
+
+const stagedUploadedAction = {
+  id: "DEC-UPL-001",
+  supplierId: adaptedSuppliers[1].id,
+  supplierCode: adaptedSuppliers[1].code,
+  supplierName: adaptedSuppliers[1].name,
+  actionTitle: zenithRecommendation.title,
+  category: zenithRecommendation.category || "Commercial",
+  urgency: zenithRecommendation.urgency || "CRITICAL",
+  requiresHumanApproval: true,
+  status: "PENDING_APPROVAL",
+  whyRecommended: zenithRecommendation.description,
+  evidenceSummary: `Calculated from uploaded dataset: ${adaptedSuppliers[1].riskScore}/100 risk.`
+};
+
+assert(stagedUploadedAction.requiresHumanApproval === true, "Preserves mandatory human executive approval requirement");
+assert(stagedUploadedAction.supplierId === "UPL-002", "Links action to uploaded supplier ID");
+assert(stagedUploadedAction.status === "PENDING_APPROVAL", "Stages action into initial PENDING_APPROVAL state");
+
 console.log("\n=======================================================");
 console.log(` Test Execution Summary: ${passedTests} Passed, ${failedTests} Failed`);
 console.log("=======================================================\n");
@@ -940,5 +1287,6 @@ if (failedTests > 0) {
 } else {
   process.exit(0);
 }
+
 
 

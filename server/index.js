@@ -1,7 +1,7 @@
 /**
  * SupplyShield AI — Backend Server Entry Point (Phase 5)
  * 
- * Boots the Express server for Grok AI assistant integration.
+ * Boots the Express server for Groq AI assistant integration.
  * Run via: npm run server (or node server/index.js)
  */
 
@@ -12,18 +12,18 @@ const app = createApp({ config });
 const port = config.PORT;
 
 const server = app.listen(port, () => {
-  const grokStatusText = config.isGrokConfigured()
-    ? `ENABLED (Active model: ${config.XAI_MODEL})`
-    : config.isGrokEnabled()
-      ? 'ENABLED but XAI_API_KEY is missing (Fallback active)'
+  const groqStatusText = config.isGroqConfigured()
+    ? `ENABLED (Active model: ${config.GROQ_MODEL})`
+    : config.isGroqEnabled()
+      ? 'ENABLED but GROQ_API_KEY is missing (Fallback active)'
       : 'DISABLED by default (Free-only safety mode active)';
 
   console.log('=======================================================');
-  console.log(' SupplyShield AI — Backend Server (Phase 5)');
+  console.log(' SupplyShield AI — Backend Server (Phase 5: Groq AI)');
   console.log('=======================================================');
   console.log(` • Server listening at: http://localhost:${port}`);
   console.log(` • CORS Allowed Origin: ${config.ALLOWED_ORIGIN}`);
-  console.log(` • Grok AI Integration: ${grokStatusText}`);
+  console.log(` • Groq AI Integration: ${groqStatusText}`);
   console.log(` • Deterministic Engine: Authoritative local fallback`);
   console.log('=======================================================\n');
 });

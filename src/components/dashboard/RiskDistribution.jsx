@@ -5,7 +5,8 @@ export function RiskDistribution({
   suppliers = [], 
   currentRiskFilter, 
   onSelectRiskFilter,
-  onInspectSupplier 
+  onInspectSupplier,
+  onOpenSimulator 
 }) {
   const highCount = suppliers.filter(s => s.riskLevel === 'HIGH').length;
   const medCount = suppliers.filter(s => s.riskLevel === 'MEDIUM').length;
@@ -16,7 +17,10 @@ export function RiskDistribution({
   const medPct = Math.round((medCount / total) * 100);
   const lowPct = Math.round((lowCount / total) * 100);
 
-  const criticalSupplier = suppliers.find(s => s.code === 'Supplier A');
+  // Identify highest risk supplier dynamically
+  const criticalSupplier = suppliers.length > 0
+    ? [...suppliers].sort((a, b) => (b.riskScore || 0) - (a.riskScore || 0))[0]
+    : null;
 
   return (
     <div style={{
@@ -35,7 +39,7 @@ export function RiskDistribution({
                 Supplier Risk Exposure Index
               </h3>
               <p className="card-subtitle">
-                Real-time risk scoring across quality, price variance, and certificate status
+                Deterministic risk scoring across quality, price variance, delivery, and compliance
               </p>
             </div>
             {currentRiskFilter !== 'ALL' && (
@@ -159,10 +163,10 @@ export function RiskDistribution({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span className="badge badge-high" style={{ fontSize: '0.72rem' }}>
-                <AlertTriangle size={12} /> Imminent Hazard Spotlight
+                <AlertTriangle size={12} /> Highest Risk Spotlight ({criticalSupplier.riskScore || 0}/100)
               </span>
               <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Clock size={12} /> T-10d Certificate Expiry
+                <Clock size={12} /> {criticalSupplier.certificateExpiryDays != null ? `T-${criticalSupplier.certificateExpiryDays}d Expiry` : (criticalSupplier.certificateStatus || 'Cert: Valid')}
               </span>
             </div>
 
@@ -170,7 +174,7 @@ export function RiskDistribution({
               {criticalSupplier.code}: {criticalSupplier.shortName}
             </h4>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-              {criticalSupplier.suppliedItem}
+              {criticalSupplier.suppliedItem} {criticalSupplier.itemCategory ? `• ${criticalSupplier.itemCategory}` : ''}
             </p>
 
             {/* Micro-metrics Grid */}
@@ -184,21 +188,21 @@ export function RiskDistribution({
               border: '1px solid var(--border-subtle)'
             }}>
               <div>
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Rejection Rate</div>
-                <div className="mono-num" style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--risk-high-text)' }}>
-                  6% → 9.2%
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Defect Rate</div>
+                <div className="mono-num" style={{ fontSize: '0.875rem', fontWeight: 700, color: (criticalSupplier.rejectionRate || 0) >= 3 ? 'var(--risk-high-text)' : 'var(--text-main)' }}>
+                  {criticalSupplier.rejectionRate != null ? `${criticalSupplier.rejectionRate}%` : 'N/A'}
                 </div>
               </div>
               <div>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Price Variance</div>
-                <div className="mono-num" style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--risk-high-text)' }}>
-                  +7.4%
+                <div className="mono-num" style={{ fontSize: '0.875rem', fontWeight: 700, color: (criticalSupplier.priceVariance || 0) > 0 ? 'var(--risk-high-text)' : 'var(--text-main)' }}>
+                  {criticalSupplier.priceVariance != null ? (criticalSupplier.priceVariance > 0 ? `+${criticalSupplier.priceVariance}%` : `${criticalSupplier.priceVariance}%`) : 'N/A'}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Sole Source</div>
-                <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#fca5a5' }}>
-                  1 Approved
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Sourcing</div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 700, color: criticalSupplier.isSingleSource ? '#fca5a5' : 'var(--text-main)' }}>
+                  {criticalSupplier.isSingleSource ? 'Sole Source' : 'Multi-Sourced'}
                 </div>
               </div>
             </div>
@@ -213,7 +217,8 @@ export function RiskDistribution({
             borderTop: '1px solid rgba(244, 63, 94, 0.2)'
           }}>
             <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-              Stock: 25d buffer (Gap: -87d)
+              Stock: {criticalSupplier.stockCoverageDays != null ? `${criticalSupplier.stockCoverageDays}d buffer` : 'Not provided'}
+              {criticalSupplier.leadTimeCoverageGapDays != null ? ` (Gap: ${criticalSupplier.leadTimeCoverageGapDays}d)` : ''}
             </span>
             <div style={{ display: 'flex', gap: '6px' }}>
               {onOpenSimulator && (

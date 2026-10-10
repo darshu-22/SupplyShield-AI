@@ -44,12 +44,18 @@ export function getConfig(overrides = {}) {
     isGroqEnabled() {
       return this.ENABLE_GROQ === true;
     },
+    isGrokEnabled() {
+      return this.isGroqEnabled();
+    },
 
     /**
      * Checks if Groq is both enabled AND properly configured with an API key
      */
     isGroqConfigured() {
       return this.isGroqEnabled() && Boolean(this.GROQ_API_KEY);
+    },
+    isGrokConfigured() {
+      return this.isGroqConfigured();
     },
 
     /**

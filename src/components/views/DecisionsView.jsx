@@ -174,11 +174,11 @@ export function DecisionsView({
               color: '#34d399',
               border: '1px solid rgba(16, 185, 129, 0.3)'
             }}>
-              Phase 6 Governance FSM
+              Human-in-the-Loop Governance
             </span>
           </div>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '4px', margin: 0 }}>
-            Audit, approve, reject, and track procurement interventions across the formal human-in-the-loop lifecycle.
+            Audit, approve, reject, and track procurement interventions. Recommendations are never auto-executed; explicit human approval is required.
           </p>
         </div>
 
@@ -650,6 +650,20 @@ export function DecisionsView({
                         }}>
                           {action.category}
                         </span>
+
+                        {(action.isUploaded || action.id?.startsWith('DEC-UPL-') || action.supplierCode?.startsWith('Uploaded-')) && (
+                          <span style={{
+                            fontSize: '0.68rem',
+                            fontWeight: 600,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                            color: '#34d399',
+                            border: '1px solid rgba(16, 185, 129, 0.25)'
+                          }}>
+                            Uploaded Dataset
+                          </span>
+                        )}
                       </div>
 
                       {/* Status & Reviewer Stamp */}

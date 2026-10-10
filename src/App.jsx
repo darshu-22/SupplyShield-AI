@@ -37,11 +37,27 @@ import { RiskSimulatorModal } from './components/simulator/RiskSimulatorModal';
 import { MethodologyModal } from './components/methodology/MethodologyModal';
 import { AgentInvestigationReportModal } from './components/agentic/AgentInvestigationReportModal';
 import { AssistantView } from './components/assistant/AssistantView';
+import { ImportAnalyzeView } from './components/views/ImportAnalyzeView';
+import { 
+  loadPersistedUploadedDataset, 
+  savePersistedUploadedDataset, 
+  clearPersistedUploadedDataset, 
+  loadActiveDatasetMode, 
+  saveActiveDatasetMode, 
+  DATASET_MODE 
+} from './import/datasetStorage';
 import { LoadingState, ErrorBanner } from './components/common/StateViews';
 
 export function App() {
   const [activeTab, setActiveTab] = useState('overview');
-  const [suppliers] = useState(SUPPLIERS);
+  const [activeDatasetMode, setActiveDatasetMode] = useState(() => loadActiveDatasetMode());
+  const [uploadedDataset, setUploadedDataset] = useState(() => loadPersistedUploadedDataset());
+
+  // Active dataset suppliers: strictly separates demo data from uploaded data
+  const activeSuppliers = (activeDatasetMode === DATASET_MODE.UPLOADED && uploadedDataset?.suppliers?.length > 0)
+    ? uploadedDataset.suppliers
+    : SUPPLIERS;
+
   const [decisions, setDecisions] = useState(() => loadPersistedActions());
   const [auditLog, setAuditLog] = useState(() => loadPersistedAuditLog());
   const [currentReviewer, setCurrentReviewer] = useState(DEFAULT_REVIEWER);
@@ -211,9 +227,45 @@ export function App() {
     triggerToast('Decision Center reset to initial demo seeds and audit log.');
   };
 
+  // Uploaded Dataset Handlers
+  const handleSaveUploadedDataset = (dataset) => {
+    setUploadedDataset(dataset);
+    savePersistedUploadedDataset(dataset);
+    setActiveDatasetMode(DATASET_MODE.UPLOADED);
+    saveActiveDatasetMode(DATASET_MODE.UPLOADED);
+    triggerToast(`Uploaded dataset saved and activated (${dataset.suppliers?.length || 0} vendors analyzed).`);
+  };
+
+  const handleClearUploadedDataset = () => {
+    clearPersistedUploadedDataset();
+    setUploadedDataset(null);
+    setActiveDatasetMode(DATASET_MODE.DEMO);
+    saveActiveDatasetMode(DATASET_MODE.DEMO);
+    triggerToast('Uploaded dataset removed. Switched back to Demo Dataset.');
+  };
+
+  const handleSetActiveDatasetMode = (mode) => {
+    setActiveDatasetMode(mode);
+    saveActiveDatasetMode(mode);
+    triggerToast(`Active context switched to ${mode === 'uploaded' ? 'Uploaded' : 'Demo'} Dataset.`);
+  };
+
+  const handleToggleDatasetMode = () => {
+    if (activeDatasetMode === DATASET_MODE.DEMO) {
+      if (uploadedDataset?.suppliers?.length > 0) {
+        handleSetActiveDatasetMode(DATASET_MODE.UPLOADED);
+      } else {
+        setActiveTab('import');
+        triggerToast('No uploaded dataset found. Please import vendor data first.');
+      }
+    } else {
+      handleSetActiveDatasetMode(DATASET_MODE.DEMO);
+    }
+  };
+
   // Inspect Supplier by Code helper (used by Activity or Decisions view)
   const handleInspectSupplierByCode = (code) => {
-    const found = suppliers.find(s => s.code === code || s.shortName.toLowerCase().includes(code.toLowerCase()));
+    const found = activeSuppliers.find(s => s.code === code || s.id === code || s.shortName.toLowerCase().includes(code.toLowerCase()));
     if (found) {
       setInspectingSupplier(found);
     }
@@ -221,15 +273,15 @@ export function App() {
 
   // Filter suppliers by header search query if present
   const displayedSuppliers = searchQuery.trim()
-    ? suppliers.filter(s => 
+    ? activeSuppliers.filter(s => 
         s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         s.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.suppliedItem.toLowerCase().includes(searchQuery.toLowerCase())
+        (s.suppliedItem && s.suppliedItem.toLowerCase().includes(searchQuery.toLowerCase()))
       )
-    : suppliers;
+    : activeSuppliers;
 
   const pendingDecisionsCount = decisions.filter(d => normalizeActionStatus(d.status) === ACTION_STATUS.PENDING_APPROVAL).length;
-  const highRiskCount = suppliers.filter(s => s.riskLevel === 'HIGH').length;
+  const highRiskCount = activeSuppliers.filter(s => s.riskLevel === 'HIGH' || s.riskLevel === 'CRITICAL').length;
 
   return (
     <div className="app-layout">
@@ -264,9 +316,11 @@ export function App() {
         setActiveTab={setActiveTab}
         isMobileOpen={isMobileOpen}
         setIsMobileOpen={setIsMobileOpen}
-        supplierCount={suppliers.length}
+        supplierCount={activeSuppliers.length}
         highRiskCount={highRiskCount}
         pendingDecisionsCount={pendingDecisionsCount}
+        activeDatasetMode={activeDatasetMode}
+        uploadedCount={uploadedDataset?.suppliers?.length || 0}
       />
 
       {/* Main Workspace Area */}
@@ -281,8 +335,12 @@ export function App() {
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           onOpenMethodology={() => setIsMethodologyOpen(true)}
-          suppliers={suppliers}
+          suppliers={activeSuppliers}
           onInspectSupplier={setInspectingSupplier}
+          activeDatasetMode={activeDatasetMode}
+          onToggleDatasetMode={handleToggleDatasetMode}
+          hasUploadedDataset={Boolean(uploadedDataset?.suppliers?.length)}
+          onNavigateTab={setActiveTab}
         />
 
         <main className="content-container">
@@ -315,6 +373,19 @@ export function App() {
                   currentRiskFilter={currentRiskFilter}
                   onSelectRiskFilter={setCurrentRiskFilter}
                   pendingActionsCount={pendingDecisionsCount}
+                  onNavigateTab={setActiveTab}
+                  activeDatasetMode={activeDatasetMode}
+                />
+              )}
+
+              {activeTab === 'import' && (
+                <ImportAnalyzeView 
+                  uploadedDataset={uploadedDataset}
+                  activeDatasetMode={activeDatasetMode}
+                  onSaveUploadedDataset={handleSaveUploadedDataset}
+                  onClearUploadedDataset={handleClearUploadedDataset}
+                  onSetActiveDatasetMode={handleSetActiveDatasetMode}
+                  onQueueDecision={handleQueueDecision}
                   onNavigateTab={setActiveTab}
                 />
               )}

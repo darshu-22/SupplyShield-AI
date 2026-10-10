@@ -39,10 +39,10 @@ export function ActivityView({ logs = [], onInspectSupplierByCode }) {
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Activity size={20} style={{ color: 'var(--teal-primary)' }} />
-            Live Telemetry & Audit Stream
+            Telemetry & Governance Audit Stream
           </h2>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-            Real-time feed tracking automated ERP invoice comparisons, incoming dock inspections, and compliance checks
+            Audited event stream tracking automated ERP invoice comparisons, dock inspection records, and governance actions
           </p>
         </div>
 

@@ -8,7 +8,8 @@ import {
   Activity, 
   X, 
   Database,
-  Bot
+  Bot,
+  UploadCloud
 } from 'lucide-react';
 
 export function Sidebar({ 
@@ -18,7 +19,9 @@ export function Sidebar({
   setIsMobileOpen,
   supplierCount = 6,
   highRiskCount = 3,
-  pendingDecisionsCount = 4
+  pendingDecisionsCount = 4,
+  activeDatasetMode = 'demo',
+  uploadedCount = 0
 }) {
   const navItems = [
     {
@@ -26,6 +29,13 @@ export function Sidebar({
       label: 'Overview',
       icon: LayoutDashboard,
       badge: null
+    },
+    {
+      id: 'import',
+      label: 'Import & Analyze',
+      icon: UploadCloud,
+      badge: activeDatasetMode === 'uploaded' ? `${uploadedCount}` : 'Upload',
+      badgeType: activeDatasetMode === 'uploaded' ? 'active' : 'default'
     },
     {
       id: 'assistant',
@@ -270,14 +280,18 @@ export function Sidebar({
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              backgroundColor: '#10b981',
-              boxShadow: '0 0 8px #10b981',
+              backgroundColor: activeDatasetMode === 'uploaded' ? '#38bdf8' : '#10b981',
+              boxShadow: activeDatasetMode === 'uploaded' ? '0 0 8px #38bdf8' : '0 0 8px #10b981',
               display: 'inline-block'
             }} />
-            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>Telemetry Active</span>
+            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+              {activeDatasetMode === 'uploaded' ? 'Uploaded Context' : 'Demo Context'}
+            </span>
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.71rem', lineHeight: 1.4 }}>
-            Local demo dataset loaded. Single-source audit rules active.
+            {activeDatasetMode === 'uploaded' 
+              ? `${supplierCount} uploaded vendors active in risk engine.`
+              : 'Deterministic demonstration catalog active.'}
           </p>
         </div>
       </aside>

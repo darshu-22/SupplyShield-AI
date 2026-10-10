@@ -1,12 +1,15 @@
 # SupplyShield AI — Agentic Supplier Risk Intelligence
 
-> **Phase 5 & 6: Procurement Approval Workflow & Secure Groq AI Integration**
+> **Real Supplier Data Import, Deterministic Risk Analysis & Human-in-the-Loop Procurement Governance**
 
 SupplyShield AI is an enterprise supplier intelligence platform designed for procurement directors and supply chain leaders. It monitors supply chain vulnerabilities across quality inspection trends, unauthorized price variance leakage, compliance accreditation cliffs, and factory stockout hazards.
 
-In **Phase 5 & 6**, the platform delivers:
-1. **Secure Groq AI Integration (Phase 5)**: Natural language supplier intelligence powered by Groq's official OpenAI-compatible API (`llama-3.3-70b-versatile`) with free-only safety controls (`ENABLE_GROQ=false` default), server-only credential security, controlled prompt grounding in relational transaction records, and instant fallback to the deterministic engine.
-2. **Human-in-the-Loop Procurement Action & Audit Workflow (Phase 6)**: Strict finite-state machine (FSM) action lifecycles, an upgraded Decision Center with real-time KPI metrics, mandatory documented justifications, and an append-only tamper-proof governance audit trail.
+The platform delivers:
+1. **Real Supplier Data Import & Analysis (Latest Upgrade)**: Drag-and-drop CSV & Excel (.xlsx) upload, smart column auto-mapping, row-level boundary validation, deterministic multi-vector risk engine evaluation with uncertainty buffers for missing data, downloadable sample templates, and deep supplier diagnostic reports.
+2. **Dataset Separation & Mode Switching**: Strict isolation between the baseline Demonstration Dataset (5 simulated tier-1 vendors) and your Uploaded Dataset, with persistent local storage, corruption recovery, and zero data cross-contamination.
+3. **Integrated AI Assistant & Decision Staging**: Ask questions grounded in your uploaded vendors (deterministic or Groq-powered) and stage actionable recommendations into the human-in-the-loop Decision Center in one click.
+4. **Secure Groq AI Integration**: Contextual natural language explanations powered by Groq's official API (`llama-3.3-70b-versatile`) with free-tier safety (`ENABLE_GROQ=false` default), server-only secret isolation, controlled prompt grounding, and zero non-deterministic score mutations.
+5. **Human-in-the-Loop Procurement Action & Audit Workflow**: Strict finite-state machine (FSM) action lifecycles, an upgraded Decision Center with KPI metrics, mandatory documented rejection reasons, and an append-only governance audit trail.
 
 ---
 
@@ -447,6 +450,118 @@ The action lifecycle strictly enforces valid transitions:
 
 ---
 
+## 8. Real Supplier Data Import, Validation & Analysis Engine
+
+SupplyShield AI enables users to import vendor data from their own supply base and receive immediate, deterministic risk intelligence, cross-signal hazard correlations, and actionable procurement recommendations.
+
+```
+       ┌────────────────────────┐
+       │ 1. Drag & Drop Upload  │  CSV / XLSX (max 5 MB)
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │ 2. Column Auto-Mapping │  Fuzzy alias matching & canonical field mapping
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │ 3. Row-Level Validate  │  Data type parsing, range bounds & duplicate detection
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │ 4. Deterministic Risk  │  5-vector re-weighted engine + uncertainty buffers
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │ 5. Results & Dossiers  │  KPI metrics, deep diagnostics & fact disclosures
+       └───────────┬────────────┘
+                   │
+                   ▼
+       ┌────────────────────────┐
+       │ 6. Stage & Governance  │  1-click action staging into Decision Center FSM
+       └────────────────────────┘
+```
+
+### A. The End-to-End User Journey
+1. **Upload Vendor Data**: Drag-and-drop or file pick `.csv` and `.xlsx` files safely parsed in the browser with size guardrails (max 5 MB).
+2. **Column Auto-Mapping**: Automatic alias matching detects common column variations (e.g. `OTIF %`, `Rejection Rate`, `Price Variance Pct`, `Days of Supply`, `Sole Source`) and maps them to canonical schema fields. Users can adjust mappings in real time.
+3. **Data Validation & Diagnostics**: Validates numeric boundaries (percentages 0-100%, days $\ge 0$), identifies duplicate vendor names, highlights row-level errors and warnings with visual badges, and calculates row completeness percentages.
+4. **Deterministic Analysis**: Click "Analyze Suppliers" to execute the 5-vector deterministic risk engine. Missing dimensions are re-weighted without fabricating false numbers.
+5. **Explain Findings**: Inspect summary metrics (high/medium/low risk counts, completeness scores, top threats) and click "View Full Analysis" to view a deep diagnostic report showing input records, observed facts, rule findings, and unmeasured vectors.
+6. **Recommend Actions & Human Approval**: Each uploaded vendor receives actionable procurement recommendations. Users stage selected recommendations into the Decision Center with duplicate safeguards, where human executive review and documented justifications are required.
+
+### B. Supported File Formats & Canonical Columns
+- **Formats**: `.csv` (via `papaparse`) and `.xlsx` (OpenXML via `read-excel-file` with zero CVE dependencies).
+- **Downloadable Templates**: Direct one-click downloads in the UI for both **Sample CSV** (`SupplyShield_Sample_Template.csv`) and authentic binary **Sample Excel** (`SupplyShield_Sample_Template.xlsx`).
+
+| Canonical Field | Type | Expected Range / Format | Key Aliases Recognized | Description |
+|---|---|---|---|---|
+| `vendorName` *(Required)* | String | Non-empty text | `Vendor`, `Supplier`, `Company`, `Supplier Name` | Primary identifier for the vendor entity |
+| `deliveryPerformance` | Number | `0.0` - `100.0` % | `OTIF`, `On-Time Delivery`, `OTIF %`, `Delivery Rate` | On-Time In-Full shipment reliability |
+| `qualityDefectRate` | Number | `0.0` - `100.0` % | `Defect Rate`, `Rejection Rate`, `Quality Defect %` | Incoming dock inspection rejection rate |
+| `priceVariance` | Number | `-50.0` - `100.0` % | `Price Variance`, `Price Variance Pct`, `Variance %` | Billed PO unit price variance over contract rate |
+| `stockCoverageDays` | Number | $\ge 0$ days | `Stock Coverage`, `Days of Supply`, `Stock (Days)` | On-hand factory inventory coverage |
+| `leadTimeDays` | Number | $\ge 0$ days | `Lead Time`, `Lead Time Days`, `Replenishment Days` | Supplier replenishment lead time |
+| `certificateDaysRemaining`| Number | Any integer / Date | `Cert Days`, `Cert Expiry`, `Accreditation Days` | Days until ISO/AS9100/IATF certification expires |
+| `singleSource` | Boolean| `true/false`, `YES/NO` | `Single Source`, `Sole Source`, `Single Provider` | Sole-source supply dependency indicator |
+| `annualSpend` | Number | $\ge 0$ USD | `Spend`, `Annual Spend`, `Contract Value` | Annual commercial purchase order commitment |
+| `suppliedItem` | String | Text | `Part Name`, `Item`, `Component`, `Supplied Item` | Monitored assembly part or material description |
+| `itemCategory` | String | Text | `Category`, `Commodity`, `Item Category` | Commodity grouping (Semiconductors, Seals, etc.) |
+| `facilityLocation` | String | Text | `Location`, `Facility`, `Country`, `Plant` | Manufacturing site or dispatch location |
+
+### C. Deterministic Risk Scoring Methodology & Thresholds
+The analysis engine calculates a composite risk score ($0 - 100$) across 5 audited vectors:
+1. **Quality Defect Vector (Weight: 25%)**:
+   - Defect rate $\ge 6.0\% \to 96$ (Critical)
+   - Defect rate $\ge 4.0\% \to 82$ (High)
+   - Defect rate $\ge 2.0\% \to 55$ (Medium)
+   - Defect rate $< 1.0\% \to 12$ (Low)
+2. **Contract Price Variance Vector (Weight: 20%)**:
+   - Variance $\ge +6.0\% \to 92$ (Critical leakage)
+   - Variance $\ge +3.0\% \to 78$ (High)
+   - Variance $> 0.5\% \to 55$ (Medium)
+   - Variance $\le 0.0\% \to 10$ (Favorable/Compliant)
+3. **Delivery Fulfillment Vector (Weight: 20%)**:
+   - OTIF $< 70\% \to 92$ (Severe slippage)
+   - OTIF $< 80\% \to 78$ (SLA breach)
+   - OTIF $< 90\% \to 52$ (Moderate delays)
+   - OTIF $\ge 95\% \to 12$ (Dependable)
+4. **Supply Continuity & Buffer Vector (Weight: 20%)**:
+   - Evaluates inventory coverage days, replenishment lead times, and sole-source dependency.
+   - Stock coverage $< 15$ days on sole source $\to 98$ (Assembly starvation risk)
+   - Stock coverage $< 30$ days $\to 88$ (Deficit buffer)
+   - Stock coverage $\ge 45$ days $\to 15$ (Healthy reserve)
+5. **Compliance Expiry Cliff Vector (Weight: 15%)**:
+   - Certificate days $\le 10$ days $\to 95$ (Dock quarantine cliff)
+   - Certificate days $\le 20$ days $\to 85$
+   - Certificate days $\le 60$ days $\to 60$
+   - Certificate days $> 90$ days $\to 10$ (Accredited)
+
+**Composite Risk Severity Bands**:
+- **CRITICAL**: Score $80 - 100$
+- **HIGH**: Score $60 - 79$
+- **MEDIUM**: Score $30 - 59$
+- **LOW**: Score $0 - 29$
+
+### D. Partial-Data Scoring & Missing Data Policy
+Real-world vendor spreadsheets often omit certain columns (e.g., certificate dates or price variance). SupplyShield AI follows a strict integrity policy:
+- **Zero Synthetic Fabrication**: The engine **never** invents purchase orders, inspection lots, certificates, or default scores for missing fields.
+- **Dynamic Weight Re-Normalization**: Available vector scores are proportional to their standard weights, divided by the sum of available weights.
+- **Uncertainty Buffer Safeguard**: **A vendor is never classified as LOW risk solely because data is missing.** If data completeness is under 50% ($<3$ vectors measured), a conservative uncertainty buffer clamps the minimum risk score to at least **35 (MEDIUM)**, preventing dangerous false negatives.
+- **Categorical Transparency**: Missing columns are highlighted as "Unmeasured Dimensions" in all reports, modals, and assistant answers.
+
+### E. Dataset Separation & Mode Switching
+- **Strict Isolation**: The baseline Demonstration Dataset (5 simulated tier-1 aerospace/automotive vendors) and Uploaded Datasets never mix in counts, scores, or reports.
+- **Dataset Switcher**: A visible toggle pill in the top header switches between **"Demo Data"** and **"Uploaded Data"** instantly.
+- **Active Context Propagation**: When Uploaded Dataset is active, the Overview Dashboard, Supplier Directory, Multi-Vector Risk Engine, AI Assistant, and Decision Center reflect only the uploaded vendors.
+- **Persistence & Recovery**: Uploaded analysis is securely persisted in `localStorage` under `supplyshield_uploaded_dataset_v2`. Corrupted storage entries are detected and safely recovered without crashing.
+- **Clean Reset**: Users can clear or replace an uploaded dataset at any time via a confirmation modal, instantly returning to the demo dataset without data contamination.
+
+---
+
 ## 10. Automated Test Suite (`tests/run-tests.js`)
 
 Run the test suite with:
@@ -454,7 +569,7 @@ Run the test suite with:
 npm test
 ```
 
-The test runner executes **309 automated unit tests** across Phases 2, 3, 4, 6, and 5:
+The test runner executes **495 automated unit tests** across Phases 2, 3, 4, 6, 5, and the Real Supplier Data Import Engine:
 
 ```
 =======================================================
@@ -504,72 +619,82 @@ The test runner executes **309 automated unit tests** across Phases 2, 3, 4, 6, 
 [29. Filtering and Sorting Logic Tests] (3 tests)
 
 =======================================================
- SupplyShield AI — Phase 5 Secure Grok AI Verification
+ SupplyShield AI — Phase 5 Secure Groq AI Verification
 =======================================================
-[30. Grok AI Configuration & Default Safe State] (10 tests)
-  ✓ PASS: Grok is disabled by default (ENABLE_GROK=false)
-  ✓ PASS: isGrokEnabled() returns false by default
-  ✓ PASS: isGrokConfigured() returns false by default
-  ✓ PASS: getClientSafeStatus reports enabled: false
-  ✓ PASS: getClientSafeStatus never exposes XAI_API_KEY
-  ✓ PASS: Custom config with ENABLE_GROK=false remains disabled even when key provided
-  ✓ PASS: Defaults to grok-2-latest model
-
+[30. Groq AI Configuration & Default Safe State] (10 tests)
 [31. Request Validation & Payload Constraints] (8 tests)
-  ✓ PASS: Rejects null body with 400
-  ✓ PASS: Rejects missing message with 400
-  ✓ PASS: Rejects non-string message with 400
-  ✓ PASS: Rejects whitespace-only message with 400
-  ✓ PASS: Rejects oversized message exceeding limit with 400
-  ✓ PASS: Flags payload_too_large status
-  ✓ PASS: Valid request sanitizes and trims message
-
 [32. Sliding Window Rate Limiting Enforcement] (5 tests)
-  ✓ PASS: Rate limit permits requests within quota
-  ✓ PASS: Rate limit blocks requests exceeding quota with HTTP 429
-  ✓ PASS: Payload flags status: rate_limited with Retry-After header
-  ✓ PASS: resetRateLimits allows subsequent requests
-
 [33. Prompt Grounding & Evidence Context Construction] (7 tests)
-  ✓ PASS: Detects Supplier A as target supplier
-  ✓ PASS: System prompt mandates authoritative calculations
-  ✓ PASS: System prompt enforces human approval boundaries
-  ✓ PASS: System prompt mandates explicit missing data reporting
-  ✓ PASS: User prompt injects exact deterministic score 92/100
-  ✓ PASS: User prompt cites relational inspection lots and purchase orders
-  ✓ PASS: Constructs standard 2-message array [system, user]
-
-[34. Mocked Grok API Call & Successful Explanation Synthesis] (4 tests)
-  ✓ PASS: Mocked Grok call succeeds with success: true
-  ✓ PASS: Source stamped as grok-ai
-  ✓ PASS: Returns expected synthesized explanation without live calls
-  ✓ PASS: Returns correct model
-
+[34. Mocked Groq API Call & Successful Explanation Synthesis] (4 tests)
 [35. Provider Failure Scenarios & Safe Recovery] (8 tests)
-  ✓ PASS: Disabled client rejects call before network
-  ✓ PASS: Missing key client rejects call with unconfigured
-  ✓ PASS: Captures AbortError as timeout (HTTP 504)
-  ✓ PASS: Captures provider 429 as provider_rate_limited
-  ✓ PASS: Captures 401 as auth_error
-  ✓ PASS: Captures 402 as insufficient_credits
-  ✓ PASS: Captures 500 as provider_error
-  ✓ PASS: Captures malformed responses gracefully
-
 [36. Strict API Key Security & Client Bundle Hygiene] (84 tests)
-  ✓ PASS: Zero client files in src/ reference process.env.XAI_API_KEY
-  ✓ PASS: Zero client files in src/ reference VITE_XAI_API_KEY
-  ✓ PASS: .gitignore explicitly excludes .env and secrets/
-  ✓ PASS: .env.example contains only placeholders and ENABLE_GROK=false
-
 [37. Deterministic Fallback & Zero Mutation Guarantees] (6 tests)
-  ✓ PASS: Unified query in deterministic mode returns source: deterministic
-  ✓ PASS: Unified query with unconfigured Grok defaults safely to deterministic
-  ✓ PASS: STRICT NON-MUTATION: supplierA.riskScore remains exactly 92
-  ✓ PASS: STRICT NON-MUTATION: Quality score breakdown remains identical
-  ✓ PASS: STRICT NON-MUTATION: Rejection rate remains exactly 9.2%
 
 =======================================================
- Test Execution Summary: 309 Passed, 0 Failed
+ SupplyShield AI — Real Supplier Data Import & Analysis
+=======================================================
+[38. CSV and Excel Parsing & Safety Limits] (8 tests)
+  ✓ PASS: Generates valid sample CSV template string
+  ✓ PASS: Parsed CSV contains 12 column headers & 6 rows
+  ✓ PASS: Generates valid binary OpenXML XLSX buffer & parses 6 rows
+  ✓ PASS: Safely rejects files exceeding 5 MB limit
+  ✓ PASS: Safely rejects unsupported file extensions & empty files
+  ✓ PASS: Exports analyzed suppliers to formatted CSV
+
+[39. Column Auto-Mapping & Alias Resolution] (8 tests)
+  ✓ PASS: Maps 'Company' alias to vendorName
+  ✓ PASS: Maps 'OTIF %' alias to deliveryPerformance
+  ✓ PASS: Maps 'Rejection Rate' alias to qualityDefectRate
+  ✓ PASS: Maps 'Price Variance Pct' alias to priceVariance
+  ✓ PASS: Maps 'Days of Supply' alias to stockCoverageDays
+  ✓ PASS: Maps 'Lead Time Days' alias to leadTimeDays
+  ✓ PASS: Maps 'Cert Expiry' alias to certificateDaysRemaining
+  ✓ PASS: Maps 'Sole Source' alias to singleSource
+
+[40. Data Validation & Numeric Boundaries] (5 tests)
+  ✓ PASS: Identifies valid and invalid rows
+  ✓ PASS: Detects duplicate vendor names
+  ✓ PASS: Flags missing vendorName required field
+  ✓ PASS: Flags out-of-bounds percentage boundaries (>100% / <0%)
+
+[41. Partial-Data Scoring Methodology & Uncertainty Buffers] (10 tests)
+  ✓ PASS: Full vendor achieves 100% data completeness (LOW risk)
+  ✓ PASS: Sparse vendor (<50% completeness) flags hasIncompleteData
+  ✓ PASS: Uncertainty buffer clamps sparse score to >= 35 (MEDIUM)
+  ✓ PASS: Sparse vendor is NEVER classified as LOW risk
+  ✓ PASS: Explicitly declares unmeasured missing dimensions
+  ✓ PASS: Score breakdown leaves unmeasured vectors null (zero fabrication)
+
+[42. Multi-Supplier Analysis & Adapter Tests (3+ Suppliers)] (7 tests)
+  ✓ PASS: Adapts 3 diverse suppliers to canonical entities
+  ✓ PASS: Correctly maps UPL-001 (LOW risk), UPL-002 (CRITICAL risk), UPL-003 (Incomplete)
+  ✓ PASS: Tags entities with uploaded dataset provenance
+  ✓ PASS: Generates actionable recommendations based on actual findings
+
+[43. Dataset Separation & Persistence] (8 tests)
+  ✓ PASS: Saves and loads uploaded dataset to localStorage with schema validation
+  ✓ PASS: Persists and toggles active dataset mode ('demo' vs 'uploaded')
+  ✓ PASS: Clears uploaded dataset and resets mode to 'demo'
+  ✓ PASS: Recovers gracefully from corrupted localStorage without throwing
+  ✓ PASS: Demo SUPPLIERS array remains exactly 6 suppliers (zero data mixing)
+
+[44. Assistant Queries on Active Uploaded Dataset] (10 tests)
+  ✓ PASS: Assistant identifies Zenith as highest risk in uploaded dataset
+  ✓ PASS: Answers explanation for Vendor 2 with verified observed facts
+  ✓ PASS: Routes to COMPARE_SUPPLIERS and compares OTIF & defect rates
+  ✓ PASS: Routes to NEXT_30_DAYS and flags 15-day cert & 14-day stock urgency
+  ✓ PASS: Routes to MISSING_DATA and explains uncertainty buffer policy
+  ✓ PASS: Routes to PRIORITY_ACTION targeting highest calculated risk
+  ✓ PASS: STRICT NON-MUTATION: Uploaded and demo scores remain identical
+
+[45. Recommendation Staging & Decision Center Governance] (4 tests)
+  ✓ PASS: Uploaded supplier generates actionable recommendation
+  ✓ PASS: Preserves mandatory human approval requirement
+  ✓ PASS: Links action to uploaded supplier ID and provenance
+  ✓ PASS: Stages action into PENDING_APPROVAL state
+
+=======================================================
+ Test Execution Summary: 495 Passed, 0 Failed
 =======================================================
 ```
 
@@ -581,7 +706,7 @@ The test runner executes **309 automated unit tests** across Phases 2, 3, 4, 6, 
 |---|---|
 | `npm run dev` | Starts Vite local development server at `http://localhost:5173` |
 | `npm run server` | Boots Node.js/Express backend on port `3001` (Groq AI proxy & status) |
-| `npm test` | Runs the 392-test suite verifying risk engine, agents, orchestrator, assistant, FSM, audit log, and Groq AI |
+| `npm test` | Runs the 495-test suite verifying risk engine, agents, orchestrator, assistant, FSM, audit log, Groq AI, and real supplier data import |
 | `npm run lint` | Runs `oxlint` across all project files (0 warnings, 0 errors) |
 | `npm run build` | Compiles production assets into `dist/` bundle |
 | `npm run preview` | Previews the production build locally |
@@ -613,12 +738,18 @@ SupplyShield AI/
 │   └── routes/
 │       └── assistantRoutes.js   # GET /api/assistant/status & POST /api/assistant/chat
 ├── tests/
-│   └── run-tests.js             # 392 automated unit tests across Phases 2, 3, 4, 6 & 5
+│   └── run-tests.js             # 495 automated unit tests across Phases 2, 3, 4, 6, 5 & Import
 ├── src/
 │   ├── main.jsx                 # React root bootstrap
-│   ├── App.jsx                  # Main application orchestrator & tab routing
+│   ├── App.jsx                  # Main application orchestrator & active dataset routing
 │   ├── index.css                # Global design system tokens, typography, dark navy theme
 │   ├── App.css                  # Animations, responsive breakpoints & micro-interactions
+│   ├── import/                  # Real Supplier Data Import & Analysis Engine
+│   │   ├── importSchema.js      # Canonical schema, 12 fields, boundary rules, aliases & sample rows
+│   │   ├── importParser.js      # Safe CSV/XLSX parser, sample templates & CSV analysis exporter
+│   │   ├── importValidator.js   # Column auto-detection, row validation & completeness score
+│   │   ├── uploadedDataAdapter.js # Entity adapter, partial-data scoring & recommendation engine
+│   │   └── datasetStorage.js    # LocalStorage persistence, schema integrity & corruption recovery
 │   ├── workflow/                # Action Lifecycle, Audit & Persistence (Phase 6)
 │   │   ├── actionLifecycleService.js # Finite-state machine, transitions & validators
 │   │   ├── auditService.js      # Append-only immutable audit trail logger
@@ -644,17 +775,19 @@ SupplyShield AI/
 │       │   ├── Badge.jsx        # RiskBadge, CertificateBadge, CriticalityBadge
 │       │   └── StateViews.jsx   # LoadingState, EmptyState, ErrorBanner
 │       ├── layout/
-│       │   ├── Header.jsx       # Header with search, methodology button, notifications
-│       │   ├── Sidebar.jsx      # Navigation sidebar with counter badges & Assistant tab
+│       │   ├── Header.jsx       # Header with search, dataset toggle, methodology, notifications
+│       │   ├── Sidebar.jsx      # Navigation sidebar with Import & Analyze tab
 │       │   └── NotificationDropdown.jsx # Header notification popover
 │       ├── dashboard/
 │       │   ├── SummaryCards.jsx # Calculated KPI cards (Overpayment, Lead-Time Deficits)
-│       │   └── RiskDistribution.jsx # Risk breakdown bar & Supplier A spotlight
+│       │   └── RiskDistribution.jsx # Risk breakdown bar & dynamic highest-risk spotlight
+│       ├── import/              # Import & Analysis Components
+│       │   └── SupplierAnalysisReportModal.jsx # Deep 5-vector analysis report modal
 │       ├── agentic/             # Agentic UI components (Phase 3)
 │       │   ├── AgenticIntelligenceSection.jsx   # Overview dashboard intelligence section
 │       │   └── AgentInvestigationReportModal.jsx# Comprehensive supplier decision dossier
 │       ├── assistant/           # Assistant UI components (Phase 4 & 5)
-│       │   └── AssistantView.jsx# Assistant chat interface with Groq indicator & mode toggle
+│       │   └── AssistantView.jsx# Assistant chat interface with Groq indicator & dataset badge
 │       ├── decisions/           # Action Lifecycle UI components (Phase 6)
 │       │   ├── ActionDetailModal.jsx      # Detailed dossier & visual audit timeline modal
 │       │   └── TransitionReasonModal.jsx  # Rejection & cancellation rationale dialog
@@ -670,21 +803,25 @@ SupplyShield AI/
 │       │   └── MethodologyModal.jsx      # Scoring equations and weights modal
 │       └── views/
 │           ├── OverviewView.jsx     # Executive command dashboard with Agentic Section
-│           ├── SuppliersView.jsx    # Master supplier directory with CSV export
+│           ├── ImportAnalyzeView.jsx# 4-step vendor import, mapping, validation & results view
+│           ├── SuppliersView.jsx    # Master supplier directory with dynamic catalog metrics
 │           ├── RiskAnalysisView.jsx # Multi-vector risk view with Cross-Signal cards
 │           ├── DecisionsView.jsx    # Upgraded Procurement Decision Center & Audit Log
-│           └── ActivityView.jsx     # Immutable telemetry event stream
+│           └── ActivityView.jsx     # Governance audit stream & telemetry event log
 ```
 
 ---
 
 ## 13. Current Limitations & Architecture Disclaimers
 
-- **Human Approval & Decision Support**: Approval of an action grants operational sign-off to proceed with an internal intervention. It **never** claims that an external supplier was contacted or that a real-world enterprise ERP purchase order was altered.
-- **Authoritative Deterministic Risk Calculations**: Groq AI explains and interprets the results of the deterministic engine. It **never** computes or alters numerical risk scores, price variances, or safety stock figures.
+- **Human Approval & Decision Support**: Approval of an action grants operational sign-off to proceed with an internal procurement intervention. It **never** claims that an external supplier was contacted or that a real-world enterprise ERP purchase order was altered without human initiation.
+- **Client-Side Privacy & Parsing**: All CSV and Excel files are parsed 100% locally in-browser using standard Web APIs, PapaParse, and OpenXML parsers. No raw spreadsheets or proprietary supplier records are transmitted to remote cloud databases or storage buckets.
+- **Authoritative Deterministic Risk Calculations**: Groq AI explains and interprets the results of the deterministic engine. It **never** computes or alters numerical risk scores, price variances, or safety stock figures. When Groq is enabled, only concise, sanitized supplier profiles are sent to the backend proxy—never raw spreadsheet files.
 - **Free-Tier Cost Protection**: Groq API integration is disabled by default (`ENABLE_GROQ=false`). Automated tests run 100% locally with zero live network calls to Groq Cloud. External AI calls require explicit configuration of API keys and billing controls by the user.
+- **Strict Dataset Isolation**: Demonstration and Uploaded datasets never mix. The top header dataset switcher toggles context across the entire application instantly. Uploaded datasets can be cleared or replaced at any time with a clean reset confirmation.
+- **Partial-Data Scoring Policy**: The engine penalizes data gaps with uncertainty buffers (clamping completeness <50% to $\ge 35$ / MEDIUM). Missing information is never fabricated, and unmeasured vectors are reported transparently.
 - **Demonstration Audit Log**: The audit trail is an append-only in-browser governance log persisted in browser `localStorage`. It demonstrates tamper-proof audit concepts but is not a cryptographic distributed ledger or backend compliance vault.
-- **Synthetic Demonstration Dataset**: All suppliers, purchase orders, inspection lots, quality metrics, and parts are synthetic demonstration records created for benchmark evaluation.
-- **Session State & Persistence**: Action records and audit entries persist across browser reloads via `localStorage` and can be reset to benchmark seeds at any time via the **"Reset Seeds"** control.
+- **Session State & Persistence**: Action records, audit entries, and uploaded datasets persist across browser reloads via `localStorage` and can be reset at any time via the **"Reset Seeds"** control.
+
 
 

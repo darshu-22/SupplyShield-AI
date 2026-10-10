@@ -4,8 +4,9 @@ import {
   RotateCw, 
   AlertTriangle, 
   Sparkles, 
-  Search,
-  BookOpen
+  Search, 
+  BookOpen,
+  Database
 } from 'lucide-react';
 import { NotificationDropdown } from './NotificationDropdown';
 
@@ -15,12 +16,16 @@ export function Header({
   onRefresh, 
   isLoading, 
   hasError, 
-  onToggleError,
-  searchQuery,
-  setSearchQuery,
-  onOpenMethodology,
-  suppliers = [],
-  onInspectSupplier
+  onToggleError, 
+  searchQuery, 
+  setSearchQuery, 
+  onOpenMethodology, 
+  suppliers = [], 
+  onInspectSupplier,
+  activeDatasetMode = 'demo',
+  onToggleDatasetMode,
+  hasUploadedDataset = false,
+  onNavigateTab
 }) {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
 
@@ -40,6 +45,8 @@ export function Header({
     switch (activeTab) {
       case 'overview':
         return { title: 'Procurement Risk Intelligence', subtitle: 'Calculated multi-vector supplier exposure, price variances, and stockout hazards' };
+      case 'import':
+        return { title: 'Supplier Data Import & Risk Engine', subtitle: 'Upload vendor spreadsheets, validate fields, and calculate 5-vector deterministic risk scores' };
       case 'assistant':
         return { title: 'AI Procurement Assistant', subtitle: 'Interactive natural language inquiry and deterministic what-if scenario intelligence' };
       case 'suppliers':
@@ -123,6 +130,30 @@ export function Header({
 
       {/* Right: Controls & Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Active Dataset Context Switcher */}
+        <button
+          onClick={() => {
+            if (hasUploadedDataset && onToggleDatasetMode) {
+              onToggleDatasetMode();
+            } else if (onNavigateTab) {
+              onNavigateTab('import');
+            }
+          }}
+          className="btn btn-secondary btn-sm"
+          title={hasUploadedDataset 
+            ? `Active Context: ${activeDatasetMode === 'uploaded' ? 'Uploaded Dataset' : 'Demo Dataset'}. Click to toggle.`
+            : 'No uploaded dataset yet. Click to import vendor data.'}
+          style={{
+            borderColor: activeDatasetMode === 'uploaded' ? 'rgba(56, 189, 248, 0.4)' : undefined,
+            backgroundColor: activeDatasetMode === 'uploaded' ? 'rgba(56, 189, 248, 0.1)' : undefined
+          }}
+        >
+          <Database size={13} style={{ color: activeDatasetMode === 'uploaded' ? 'var(--teal-primary)' : '#10b981' }} />
+          <span className="header-btn-label">
+            {activeDatasetMode === 'uploaded' ? 'Uploaded Data' : 'Demo Data'}
+          </span>
+        </button>
+
         {/* Global Quick Search */}
         <div style={{ position: 'relative', width: '220px' }} className="header-search">
           <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />

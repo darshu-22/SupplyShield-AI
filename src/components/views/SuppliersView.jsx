@@ -104,68 +104,94 @@ export function SuppliersView({
       </div>
 
       {/* Directory Metrics Strip */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '12px',
-        marginBottom: '20px'
-      }}>
-        <div style={{
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-sm)',
-          padding: '12px 16px'
-        }}>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-            Total Contract Spend
-          </span>
-          <div className="mono-num" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
-            $9.10M / yr
-          </div>
-        </div>
+      {(() => {
+        const totalSpend = suppliers.reduce((acc, s) => acc + (s.annualSpend || 0), 0);
+        const formattedSpend = totalSpend > 0 
+          ? (totalSpend >= 1000000 ? `$${(totalSpend / 1000000).toFixed(2)}M / yr` : `$${Math.round(totalSpend / 1000)}K / yr`)
+          : (suppliers.some(s => s.contractValue && s.contractValue !== 'Not specified') ? 'Recorded in POs' : 'Not Specified');
 
-        <div style={{
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-sm)',
-          padding: '12px 16px'
-        }}>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-            Sole-Source Suppliers
-          </span>
-          <div className="mono-num" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--risk-high-text)' }}>
-            {suppliers.filter(s => s.isSingleSource).length} (Supplier A)
-          </div>
-        </div>
+        const soleSourceList = suppliers.filter(s => s.isSingleSource);
+        const soleSourceNames = soleSourceList.map(s => s.shortName || s.code || s.name).slice(0, 2).join(', ');
+        const soleSourceLabel = soleSourceList.length > 0 
+          ? `${soleSourceList.length} (${soleSourceNames}${soleSourceList.length > 2 ? '...' : ''})`
+          : '0 Sole-Source';
 
-        <div style={{
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-sm)',
-          padding: '12px 16px'
-        }}>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-            Average OTIF Fulfillment
-          </span>
-          <div className="mono-num" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
-            83.8%
-          </div>
-        </div>
+        const otifSuppliers = suppliers.filter(s => s.onTimeDeliveryRate != null);
+        const avgOtif = otifSuppliers.length > 0
+          ? (otifSuppliers.reduce((acc, s) => acc + s.onTimeDeliveryRate, 0) / otifSuppliers.length).toFixed(1) + '%'
+          : 'Not Reported';
 
-        <div style={{
-          backgroundColor: 'var(--bg-card)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-sm)',
-          padding: '12px 16px'
-        }}>
-          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-            Audits Due &lt;30 Days
-          </span>
-          <div className="mono-num" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--risk-med-text)' }}>
-            2 Suppliers (A, E)
+        const expiringSuppliers = suppliers.filter(s => s.certificateExpiryDays != null && s.certificateExpiryDays <= 30);
+        const expiringNames = expiringSuppliers.map(s => s.code || s.shortName).slice(0, 2).join(', ');
+        const expiringLabel = expiringSuppliers.length > 0
+          ? `${expiringSuppliers.length} (${expiringNames}${expiringSuppliers.length > 2 ? '...' : ''})`
+          : '0 (All Current)';
+
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px',
+            marginBottom: '20px'
+          }}>
+            <div style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '12px 16px'
+            }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Total Annual Spend
+              </span>
+              <div className="mono-num" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                {formattedSpend}
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '12px 16px'
+            }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Sole-Source Suppliers
+              </span>
+              <div className="mono-num" style={{ fontSize: '1.2rem', fontWeight: 700, color: soleSourceList.length > 0 ? 'var(--risk-high-text)' : 'var(--text-main)' }}>
+                {soleSourceLabel}
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '12px 16px'
+            }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Average OTIF Delivery
+              </span>
+              <div className="mono-num" style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                {avgOtif}
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '12px 16px'
+            }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Audits Due &lt;30 Days
+              </span>
+              <div className="mono-num" style={{ fontSize: '1.2rem', fontWeight: 700, color: expiringSuppliers.length > 0 ? 'var(--risk-med-text)' : '#10b981' }}>
+                {expiringLabel}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Main Supplier Table */}
       <SupplierTable 

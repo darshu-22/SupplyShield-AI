@@ -299,6 +299,22 @@ export function runRiskInvestigationAgent(supplier) {
     });
   }
 
+  // Support uploaded suppliers where transactional sub-arrays are not present
+  if (supplier.isUploaded && findings.length === 0) {
+    (supplier.ruleFindings || []).forEach((rf, idx) => {
+      findings.push({
+        id: `FIND-UPL-${supplier.id}-${idx + 1}`,
+        vector: "OPERATIONAL",
+        findingTitle: rf,
+        severity: supplier.riskScore >= 80 ? "CRITICAL" : supplier.riskScore >= 60 ? "HIGH" : "MEDIUM",
+        isPrimaryDriver: idx === 0,
+        evidenceStrength: "CALCULATED",
+        observedFacts: supplier.observedFacts || [],
+        supportingRecords: { source: supplier.sourceDataset || "Uploaded Dataset" }
+      });
+    });
+  }
+
   const primaryRiskDrivers = findings.filter(f => f.isPrimaryDriver);
 
   return {

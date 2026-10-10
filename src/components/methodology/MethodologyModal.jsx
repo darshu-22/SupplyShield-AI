@@ -121,6 +121,27 @@ export function MethodologyModal({ isOpen = true, onClose }) {
               </div>
             </div>
           </div>
+
+          {/* Partial-Data Scoring & Missing Data Safeguards */}
+          <div style={{
+            padding: '14px 16px',
+            borderRadius: 'var(--radius-sm)',
+            backgroundColor: 'rgba(14, 165, 233, 0.08)',
+            border: '1px solid rgba(14, 165, 233, 0.25)'
+          }}>
+            <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--teal-primary)', marginBottom: '6px' }}>
+              Partial-Data Scoring Policy & Uncertainty Buffer (Imported Records)
+            </h4>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: '8px' }}>
+              When a user uploads a dataset with missing optional columns, SupplyShield AI applies a deterministic partial-data scoring methodology:
+            </p>
+            <ul style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.5, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <li><strong>Dynamic Weight Re-Normalization:</strong> Available vector scores are proportional to their standard relative weights, divided by the sum of measured weights.</li>
+              <li><strong>Zero Synthetic Fabrication:</strong> Missing dimensions (e.g. unrecorded price variance or defect rate) are never filled with fabricated demo constants.</li>
+              <li><strong>Uncertainty Floor:</strong> A vendor cannot be classified as LOW risk solely because data is absent. When data completeness is under 50%, a conservative uncertainty floor clamps the score to at least 35 (MEDIUM).</li>
+              <li><strong>Completeness Transparency:</strong> Every uploaded supplier displays a completeness score (e.g., 60% or 100%) and explicit disclosures of unmeasured risk dimensions.</li>
+            </ul>
+          </div>
         </div>
 
         <div className="modal-footer">

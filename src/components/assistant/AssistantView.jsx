@@ -39,6 +39,21 @@ export function AssistantView({
   onQueueDecision,
   onNavigateTab 
 }) {
+  const isUploadedContext = suppliers.length > 0 && Boolean(suppliers[0]?.isUploaded);
+  const s0Name = suppliers[0]?.shortName || suppliers[0]?.name || 'Vendor 1';
+  const s1Name = suppliers[1]?.shortName || suppliers[1]?.name || 'Vendor 2';
+
+  const starterQuestions = isUploadedContext ? [
+    "Which uploaded vendor has the highest calculated risk?",
+    `Why was ${s0Name} classified as ${suppliers[0]?.riskLevel || 'high'} risk?`,
+    `What data is missing for ${s0Name}?`,
+    "Which suppliers need attention in the next 30 days?",
+    "What should procurement do first?",
+    "What evidence supports the recommendation?",
+    `Compare the delivery and quality performance of ${s0Name} and ${s1Name}`,
+    `What happens if we increase safety stock by 30 days for ${s0Name}?`
+  ] : STARTER_QUESTIONS;
+
   const [messages, setMessages] = useState([]);
   const [inputQuery, setInputQuery] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -134,7 +149,7 @@ export function AssistantView({
     } finally {
       setIsProcessing(false);
     }
-  }, [inputQuery, isProcessing, assistantMode, groqStatus, suppliers, messages]);
+  }, [inputQuery, setInputQuery, isProcessing, assistantMode, groqStatus, suppliers, messages]);
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -237,6 +252,19 @@ export function AssistantView({
                   Groq AI: Disabled (Free Tier Safety)
                 </span>
               )}
+
+              {/* Active Dataset Context Badge */}
+              <span style={{
+                fontSize: '0.68rem',
+                fontWeight: 600,
+                color: isUploadedContext ? '#10b981' : '#38bdf8',
+                backgroundColor: isUploadedContext ? 'rgba(16, 185, 129, 0.12)' : 'rgba(56, 189, 248, 0.12)',
+                border: `1px solid ${isUploadedContext ? 'rgba(16, 185, 129, 0.3)' : 'rgba(56, 189, 248, 0.25)'}`,
+                padding: '2px 8px',
+                borderRadius: '9999px'
+              }}>
+                {isUploadedContext ? `Uploaded Dataset (${suppliers.length} vendors)` : 'Demo Dataset (5 vendors)'}
+              </span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               {assistantMode === 'groq'
@@ -348,48 +376,88 @@ export function AssistantView({
       }}>
         {/* Empty State / Suggested Questions */}
         {messages.length === 0 && (
-          <div style={{
-            margin: 'auto',
-            maxWidth: '680px',
-            textAlign: 'center',
-            padding: '30px 16px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '16px'
-          }}>
+          suppliers.length === 0 ? (
             <div style={{
-              width: '52px',
-              height: '52px',
-              borderRadius: '12px',
-              backgroundColor: 'rgba(14, 165, 233, 0.12)',
-              border: '1px solid rgba(14, 165, 233, 0.25)',
+              margin: 'auto',
+              maxWidth: '540px',
+              textAlign: 'center',
+              padding: '40px 16px',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--teal-primary)'
+              gap: '14px'
             }}>
-              <Sparkles size={26} />
-            </div>
-
-            <div>
+              <div style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '12px',
+                backgroundColor: 'rgba(14, 165, 233, 0.12)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--teal-primary)'
+              }}>
+                <Bot size={26} />
+              </div>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                How can I assist your procurement decisions today?
+                No Uploaded Vendors in Active Context
               </h3>
-              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '540px' }}>
-                Ask questions about supplier risks, compare contract price variances, evaluate quality defects, or synthesize multi-vector findings.
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                You are currently in Uploaded Dataset mode, but no file has been imported yet. Import vendor data to ask the assistant questions about your suppliers.
               </p>
+              <button 
+                onClick={() => onNavigateTab && onNavigateTab('import')}
+                className="btn btn-primary"
+                style={{ marginTop: '8px' }}
+              >
+                Go to Import & Analyze
+              </button>
             </div>
-
-            {/* Starter Questions Grid */}
+          ) : (
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '10px',
-              width: '100%',
-              marginTop: '10px'
+              margin: 'auto',
+              maxWidth: '680px',
+              textAlign: 'center',
+              padding: '30px 16px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '16px'
             }}>
-              {STARTER_QUESTIONS.map((q, idx) => (
+              <div style={{
+                width: '52px',
+                height: '52px',
+                borderRadius: '12px',
+                backgroundColor: 'rgba(14, 165, 233, 0.12)',
+                border: '1px solid rgba(14, 165, 233, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--teal-primary)'
+              }}>
+                <Sparkles size={26} />
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                  How can I assist your procurement decisions today?
+                </h3>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '4px', maxWidth: '540px' }}>
+                  {isUploadedContext 
+                    ? `Ask questions grounded in your ${suppliers.length} uploaded vendor records, missing data, or risk findings.`
+                    : 'Ask questions about supplier risks, compare contract price variances, evaluate quality defects, or synthesize multi-vector findings.'}
+                </p>
+              </div>
+
+              {/* Starter Questions Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: '10px',
+                width: '100%',
+                marginTop: '10px'
+              }}>
+                {starterQuestions.map((q, idx) => (
                 <button
                   key={idx}
                   onClick={() => handleSendMessage(q)}
@@ -423,7 +491,8 @@ export function AssistantView({
               ))}
             </div>
           </div>
-        )}
+        )
+      )}
 
         {/* Message Stream */}
         {messages.map((msg) => {

@@ -39,10 +39,10 @@ export function processAssistantQuery(query, suppliers = [], _conversationHistor
     };
   }
 
-  // 1. Route intent and extract entities
-  const routed = routeUserIntent(query);
+  // 1. Route intent and extract entities (supporting active dataset)
+  const routed = routeUserIntent(query, suppliers);
   const targetSupplier = routed.supplier 
-    ? suppliers.find(s => s.id === routed.supplier.id || s.code === routed.supplier.code)
+    ? suppliers.find(s => s.id === routed.supplier.id || s.code === routed.supplier.code || (s.name && routed.supplier.name && s.name.toLowerCase() === routed.supplier.name.toLowerCase()))
     : null;
 
   // Highest risk supplier by default if needed for context
@@ -51,6 +51,196 @@ export function processAssistantQuery(query, suppliers = [], _conversationHistor
   let responsePayload = {};
 
   switch (routed.intent) {
+    // ----------------------------------------------------
+    // INTENT: Compare Multiple Suppliers
+    // ----------------------------------------------------
+    case "COMPARE_SUPPLIERS": {
+      const sA = routed.supplierA || suppliers[0];
+      const sB = routed.supplierB || suppliers[1] || suppliers[0];
+
+      if (!sA || !sB) {
+        responsePayload = {
+          intent: "COMPARE_SUPPLIERS",
+          content: "Please ensure at least two suppliers are loaded in the active dataset to compare.",
+          observedFacts: [],
+          inferredRisks: [],
+          recommendations: []
+        };
+        break;
+      }
+
+      const deliveryA = sA.onTimeDeliveryRate != null ? `${sA.onTimeDeliveryRate}%` : 'Not provided';
+      const deliveryB = sB.onTimeDeliveryRate != null ? `${sB.onTimeDeliveryRate}%` : 'Not provided';
+      const qualityA = sA.rejectionRate != null ? `${sA.rejectionRate}%` : 'Not provided';
+      const qualityB = sB.rejectionRate != null ? `${sB.rejectionRate}%` : 'Not provided';
+      const priceA = sA.priceVarianceFormatted || 'Not provided';
+      const priceB = sB.priceVarianceFormatted || 'Not provided';
+
+      const diff = Math.abs(sA.riskScore - sB.riskScore);
+      const higher = sA.riskScore > sB.riskScore ? sA : sB;
+      const lower = sA.riskScore > sB.riskScore ? sB : sA;
+
+      responsePayload = {
+        intent: "COMPARE_SUPPLIERS",
+        content: `### Performance Comparison: **${sA.name}** vs. **${sB.name}**\n\n` +
+          `| Operational Dimension | **${sA.code}** (${sA.shortName}) | **${sB.code}** (${sB.shortName}) |\n` +
+          `| :--- | :--- | :--- |\n` +
+          `| **Composite Risk Score** | **${sA.riskScore}/100** (${sA.riskLevel}) | **${sB.riskScore}/100** (${sB.riskLevel}) |\n` +
+          `| **Delivery Performance (OTIF)** | ${deliveryA} | ${deliveryB} |\n` +
+          `| **Quality Defect / Rejection** | ${qualityA} | ${qualityB} |\n` +
+          `| **Contract Price Variance** | ${priceA} | ${priceB} |\n` +
+          `| **Stock Coverage Reserves** | ${sA.stockCoverageDays != null ? `${sA.stockCoverageDays}d` : 'N/A'} | ${sB.stockCoverageDays != null ? `${sB.stockCoverageDays}d` : 'N/A'} |\n` +
+          `| **Data Completeness** | ${sA.dataCompletenessScore || 100}% | ${sB.dataCompletenessScore || 100}% |\n\n` +
+          `**Comparative Assessment:**\n` +
+          (diff > 0
+            ? `• **${higher.name}** presents higher exposure (+${diff} risk points), driven by: ${higher.preliminarySummary?.primaryRiskDriver || 'operational variance'}.\n• **${lower.name}** demonstrates superior operational stability.`
+            : `• Both vendors exhibit equivalent composite risk scores of ${sA.riskScore}/100.`),
+        observedFacts: [
+          `${sA.name}: Delivery ${deliveryA}, Defects ${qualityA}, Price ${priceA}.`,
+          `${sB.name}: Delivery ${deliveryB}, Defects ${qualityB}, Price ${priceB}.`
+        ],
+        inferredRisks: [
+          higher.riskScore >= 60 ? `${higher.name} requires prioritized risk mitigation controls.` : `${higher.name} operates within control limits.`
+        ],
+        recommendations: [
+          `Review operational SLA metrics between ${sA.code} and ${sB.code}.`
+        ],
+        evidence: {
+          supplierA: sA.code,
+          supplierB: sB.code,
+          scoreA: sA.riskScore,
+          scoreB: sB.riskScore
+        },
+        suggestedFollowUps: [
+          `Why was ${sA.code} classified as ${sA.riskLevel} risk?`,
+          `Why was ${sB.code} classified as ${sB.riskLevel} risk?`,
+          `What should procurement do first?`
+        ]
+      };
+      break;
+    }
+
+    // ----------------------------------------------------
+    // INTENT: Missing Data & Completeness Disclosures
+    // ----------------------------------------------------
+    case "MISSING_DATA": {
+      const active = targetSupplier || suppliers.find(s => s.hasIncompleteData) || suppliers[0];
+      const missingList = active.missingDimensions || [];
+      const hasMissing = missingList.length > 0 || (active.dataCompletenessScore && active.dataCompletenessScore < 100);
+
+      responsePayload = {
+        intent: "MISSING_DATA",
+        supplierId: active.id,
+        supplierCode: active.code,
+        content: hasMissing
+          ? `### Missing Data Audit for **${active.name} (${active.code})**\n\n` +
+            `• **Data Completeness:** **${active.dataCompletenessScore || 0}%**\n` +
+            `• **Unrecorded Operational Dimensions:**\n` +
+            missingList.map(m => `  - **${m}**: Field omitted in uploaded dataset.`).join('\n') +
+            `\n\n**Governance & Safety Rule:**\n` +
+            `Per SupplyShield AI deterministic principles, missing data is **never assumed to indicate low risk**. When core vectors are missing (<50% completeness), an uncertainty buffer is enforced (minimum score of 35 / MEDIUM risk) so that lack of telemetry is never misclassified as "safe/low risk".`
+          : `### Complete Data Record for **${active.name} (${active.code})**\n\n` +
+            `All core operational dimensions (Delivery, Quality, Price, Compliance, Continuity) were populated in the dataset (100% Data Completeness). Zero missing fields.`,
+        observedFacts: [
+          `Data completeness score: ${active.dataCompletenessScore || 100}%.`,
+          missingList.length > 0 ? `Unrecorded fields: ${missingList.join(', ')}.` : 'All canonical indicators populated.'
+        ],
+        inferredRisks: active.riskUncertaintyNotice ? [active.riskUncertaintyNotice] : [],
+        recommendations: [
+          `Request updated supplier telemetry from ${active.code} for unrecorded dimensions.`,
+          `Review data completeness in Import & Analyze view.`
+        ],
+        suggestedFollowUps: [
+          `Why was ${active.code} classified as ${active.riskLevel} risk?`,
+          `Which uploaded vendor has the highest calculated risk?`,
+          `What should procurement do first?`
+        ]
+      };
+      break;
+    }
+
+    // ----------------------------------------------------
+    // INTENT: 30-Day Operational Priority Review
+    // ----------------------------------------------------
+    case "NEXT_30_DAYS": {
+      const urgentSuppliers = suppliers.filter(s => 
+        (s.certificateExpiryDays != null && s.certificateExpiryDays <= 30) ||
+        (s.stockCoverageDays != null && s.stockCoverageDays <= 30) ||
+        s.riskLevel === 'CRITICAL'
+      );
+
+      const listText = urgentSuppliers.length > 0
+        ? urgentSuppliers.map(s => 
+            `**${s.name} (${s.code})** — Risk: **${s.riskScore}/100** (${s.riskLevel})\n` +
+            `  • *Urgency Driver:* ${
+              (s.certificateExpiryDays != null && s.certificateExpiryDays <= 30)
+                ? `Compliance certificate expires in ${s.certificateExpiryDays} days!`
+                : (s.stockCoverageDays != null && s.stockCoverageDays <= 30)
+                ? `Factory buffer covers only ${s.stockCoverageDays} days against consumption!`
+                : `Critical multi-vector risk score (${s.riskScore}/100).`
+            }`
+          ).join('\n\n')
+        : 'Zero suppliers have critical triggers within the next 30 days. All active certifications and stock buffers exceed 30-day safety thresholds.';
+
+      responsePayload = {
+        intent: "NEXT_30_DAYS",
+        content: `### 30-Day Operational Priority Review\n\n` +
+          `Identified **${urgentSuppliers.length} supplier(s)** requiring procurement attention in the next 30 days:\n\n` +
+          listText,
+        observedFacts: [
+          `${urgentSuppliers.length} supplier(s) meet 30-day intervention criteria in active dataset.`
+        ],
+        inferredRisks: urgentSuppliers.map(s => `${s.code} requires active monitoring to prevent operational or compliance disruption.`),
+        recommendations: urgentSuppliers.flatMap(s => (s.preliminarySummary?.recommendedActions || []).slice(0, 1).map(a => `${s.code}: ${a.title}`)),
+        suggestedFollowUps: [
+          "What should procurement do first?",
+          "What evidence supports the recommendation?",
+          "Which supplier is the riskiest and why?"
+        ]
+      };
+      break;
+    }
+
+    // ----------------------------------------------------
+    // INTENT: Priority Immediate Action for Procurement
+    // ----------------------------------------------------
+    case "PRIORITY_ACTION": {
+      const highest = riskiestSupplier || suppliers[0];
+      const topAction = highest?.preliminarySummary?.recommendedActions?.[0] || {
+        title: "Review Supplier Risk Scorecard",
+        description: "Engage supplier to review performance parameters."
+      };
+
+      responsePayload = {
+        intent: "PRIORITY_ACTION",
+        supplierId: highest?.id,
+        supplierCode: highest?.code,
+        content: `### Priority Immediate Action for Procurement\n\n` +
+          `**Top Priority Vendor:** **${highest?.name} (${highest?.code})** (Score: **${highest?.riskScore}/100**)\n\n` +
+          `**Immediate Recommended Action:**\n` +
+          `**${topAction.title}**\n\n` +
+          `• **Operational Rationale:** ${topAction.whyRecommended || topAction.description || highest?.preliminarySummary?.primaryRiskDriver}\n` +
+          `• **Urgency:** ${topAction.urgency || highest?.riskLevel}\n` +
+          `• **Governance Requirement:** This action can be staged directly into the Decision Center for executive review and sign-off.`,
+        observedFacts: [
+          `Highest risk vendor: ${highest?.name} (${highest?.riskScore}/100).`,
+          `Primary driver: ${highest?.preliminarySummary?.primaryRiskDriver || 'Operational variance'}.`
+        ],
+        inferredRisks: [
+          `Delaying action on ${highest?.code} compounds operational disruption risks.`
+        ],
+        recommendations: [
+          `Stage "${topAction.title}" into Decision Center for executive review.`
+        ],
+        suggestedFollowUps: [
+          `Why was ${highest?.code} classified as ${highest?.riskLevel} risk?`,
+          `What evidence supports the recommendation?`,
+          `Which suppliers need attention in the next 30 days?`
+        ]
+      };
+      break;
+    }
+
     // ----------------------------------------------------
     // INTENT 1: General Help & Capabilities
     // ----------------------------------------------------
@@ -151,17 +341,25 @@ export function processAssistantQuery(query, suppliers = [], _conversationHistor
         supplierId: supp.id,
         supplierCode: supp.code,
         content: `**${supp.name} (${supp.code})** is categorized as **${supp.riskLevel} Risk** with a composite score of **${supp.riskScore}/100**.\n\n### Operational Findings Breakdown:\n${findingsText}\n\n${crossScenarios.length > 0 ? `### Active Cross-Signal Compound Hazard:\n• **${crossScenarios[0].title}**: ${crossScenarios[0].detectedPattern}\n\n` : ''}${topAction ? `### Recommended Priority Action:\n• **${topAction.title}** (*${topAction.urgency} urgency*) — ${topAction.whyRecommended}` : ''}`,
-        observedFacts: primaryDrivers.flatMap(d => d.observedFacts || []),
-        inferredRisks: crossScenarios.map(c => `${c.title}: ${c.whyItMatters}`),
-        recommendations: dossier.decisionReview?.reviewedDecisions?.slice(0, 2).map(d => `${d.title} — ${d.suggestedNextStep}`),
+        observedFacts: (primaryDrivers.flatMap(d => d.observedFacts || []).length > 0)
+          ? primaryDrivers.flatMap(d => d.observedFacts || [])
+          : (supp.observedFacts || [`Factual metrics: OTIF ${supp.onTimeDeliveryRate != null ? `${supp.onTimeDeliveryRate}%` : 'N/A'}, Defects ${supp.rejectionRate != null ? `${supp.rejectionRate}%` : 'N/A'}, Price Variance ${supp.priceVarianceFormatted || 'N/A'}`]),
+        inferredRisks: (crossScenarios.length > 0)
+          ? crossScenarios.map(c => `${c.title}: ${c.whyItMatters}`)
+          : (supp.warningSigns || [supp.preliminarySummary?.primaryRiskDriver || 'Operational variance']),
+        recommendations: (dossier.decisionReview?.reviewedDecisions?.length > 0)
+          ? dossier.decisionReview.reviewedDecisions.slice(0, 2).map(d => `${d.title} — ${d.suggestedNextStep}`)
+          : (supp.preliminarySummary?.recommendedActions || []).map(a => a.title),
         evidence: {
           poNumbers: supp.purchaseOrders?.map(p => p.poNumber) || [],
           lotNumbers: supp.inspectionLots?.map(l => l.lotNumber) || [],
-          certNumber: supp.complianceRecords?.[0]?.certNumber || "N/A",
+          certNumber: supp.complianceRecords?.[0]?.certNumber || (supp.certificateExpiryDays != null ? `${supp.certificateExpiryDays}d remaining` : "N/A"),
           stockCoverageDays: supp.stockCoverageDays,
           leadTimeGapDays: supp.leadTimeCoverageGapDays,
           priceVariance: supp.priceVarianceFormatted,
-          overpayment: `$${(supp.quarterlyOverpaymentExposure || 0).toLocaleString()}`
+          overpayment: `$${(supp.quarterlyOverpaymentExposure || 0).toLocaleString()}`,
+          isUploaded: Boolean(supp.isUploaded),
+          dataCompletenessScore: supp.dataCompletenessScore || 100
         },
         suggestedFollowUps: [
           `What evidence supports ${supp.code}'s score?`,

@@ -16,26 +16,68 @@ export function OverviewView({
   currentRiskFilter,
   onSelectRiskFilter,
   pendingActionsCount,
-  onNavigateTab 
+  onNavigateTab,
+  activeDatasetMode = 'demo'
 }) {
+  const isUploaded = activeDatasetMode === 'uploaded' || (suppliers.length > 0 && suppliers[0]?.isUploaded);
+
   return (
     <div>
-      {/* Simulation Notice Banner */}
-      <div className="banner-notice">
+      {/* Dataset Context Banner */}
+      <div className="banner-notice" style={{
+        borderColor: isUploaded ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-subtle)',
+        backgroundColor: isUploaded ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-card)'
+      }}>
         <div className="banner-content">
-          <Info size={18} style={{ color: 'var(--teal-primary)', flexShrink: 0 }} />
+          <Info size={18} style={{ color: isUploaded ? '#10b981' : 'var(--teal-primary)', flexShrink: 0 }} />
           <div>
-            <strong style={{ color: 'var(--text-main)' }}>Fictional Demonstration Prototype:</strong> All supplier names, contracts, metrics, and price variances are simulated demonstration test data.
+            {isUploaded ? (
+              <>
+                <strong style={{ color: '#10b981' }}>Uploaded Dataset Active:</strong> Analyzing {suppliers.length} imported vendor records. Scores, risk levels, and recommendations are deterministically computed from your source file.
+              </>
+            ) : (
+              <>
+                <strong style={{ color: 'var(--text-main)' }}>Demonstration Dataset Active:</strong> Evaluating 5 simulated tier-1 aerospace and automotive suppliers. Upload your own supplier file anytime to analyze your vendors.
+              </>
+            )}
           </div>
         </div>
-        <button 
-          onClick={() => onNavigateTab && onNavigateTab('decisions')}
-          className="btn btn-subtle btn-sm"
-          style={{ fontSize: '0.78rem', color: 'var(--teal-primary)' }}
-        >
-          View Action Pipeline &rarr;
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button 
+            onClick={() => onNavigateTab && onNavigateTab('import')}
+            className="btn btn-subtle btn-sm"
+            style={{ fontSize: '0.78rem', color: isUploaded ? '#10b981' : 'var(--teal-primary)' }}
+          >
+            {isUploaded ? 'Import & Diagnostics →' : 'Import Vendor Data →'}
+          </button>
+          <button 
+            onClick={() => onNavigateTab && onNavigateTab('decisions')}
+            className="btn btn-subtle btn-sm"
+            style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}
+          >
+            Action Pipeline →
+          </button>
+        </div>
       </div>
+
+      {suppliers.length === 0 ? (
+        <div className="card" style={{ padding: '48px', textAlign: 'center', marginTop: '20px' }}>
+          <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '8px' }}>
+            No Uploaded Suppliers Found
+          </h3>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', maxWidth: '480px', margin: '0 auto 20px auto', lineHeight: 1.5 }}>
+            You are currently in Uploaded Dataset mode, but no vendor spreadsheet has been imported yet.
+          </p>
+          <button 
+            onClick={() => onNavigateTab && onNavigateTab('import')}
+            className="btn btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', margin: '0 auto' }}
+          >
+            Go to Import & Analyze
+          </button>
+        </div>
+      ) : (
+        <>
 
       {/* Summary KPI Cards */}
       <SummaryCards 
@@ -86,6 +128,8 @@ export function OverviewView({
           setExternalRiskFilter={onSelectRiskFilter}
         />
       </div>
-    </div>
-  );
+    </>
+  )}
+</div>
+);
 }

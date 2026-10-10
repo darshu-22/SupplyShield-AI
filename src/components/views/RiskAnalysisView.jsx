@@ -52,159 +52,223 @@ export function RiskAnalysisView({
       </div>
 
       {/* 4 Risk Pillars Grid with Calculated Totals */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-        gap: '16px'
-      }}>
-        {/* Pillar 1: Quality Defects */}
-        <div className="card" style={{ borderTop: '3px solid var(--risk-high-solid)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              backgroundColor: 'var(--risk-high-bg)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--risk-high-solid)'
-            }}>
-              <TrendingUp size={18} />
-            </div>
-            <div>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                Quality & Defect Surge
-              </h4>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Incoming inspection rejection rate</span>
-            </div>
-          </div>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
-            <strong style={{ color: 'var(--risk-high-text)' }}>Apex Castings (9.2%)</strong> and <strong style={{ color: 'var(--risk-med-text)' }}>Rotary Bearings (4.6%)</strong> exhibit acute defect escalation above contract thresholds.
-          </p>
-          <div style={{ fontSize: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Apex Castings:</span>
-              <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-high-text)' }}>9.2% defect rate</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Rotary Bearings:</span>
-              <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-med-text)' }}>4.6% defect rate</span>
-            </div>
-          </div>
-        </div>
+      {(() => {
+        const qualitySorted = [...suppliers]
+          .filter(s => s.rejectionRate != null && s.rejectionRate > 0)
+          .sort((a, b) => b.rejectionRate - a.rejectionRate);
 
-        {/* Pillar 2: Price Variance Leakage */}
-        <div className="card" style={{ borderTop: '3px solid #38bdf8' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              backgroundColor: 'rgba(56, 189, 248, 0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#38bdf8'
-            }}>
-              <DollarSign size={18} />
-            </div>
-            <div>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                Contract Price Variance
-              </h4>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Unapproved invoice billing overages</span>
-            </div>
-          </div>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
-            Audited financial exposure: <strong style={{ color: '#38bdf8' }}>$127,272</strong> across unapproved raw material surcharges on repeated PO lines.
-          </p>
-          <div style={{ fontSize: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Apex Castings (+7.4%):</span>
-              <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-high-text)' }}>+$74,000 billed</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Kinetic Dynamics (+5.5%):</span>
-              <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-high-text)' }}>+$45,100 billed</span>
-            </div>
-          </div>
-        </div>
+        const priceSorted = [...suppliers]
+          .filter(s => s.priceVariance != null && s.priceVariance > 0)
+          .sort((a, b) => b.priceVariance - a.priceVariance);
 
-        {/* Pillar 3: Compliance & Expiry */}
-        <div className="card" style={{ borderTop: '3px solid var(--risk-med-solid)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              backgroundColor: 'var(--risk-med-bg)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--risk-med-solid)'
-            }}>
-              <Clock size={18} />
-            </div>
-            <div>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                Compliance & Expiry Cliff
-              </h4>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Mandatory aerospace & auto certifications</span>
-            </div>
-          </div>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
-            Two key suppliers inside the 30-day compliance expiry cliff without registrar recertification documents confirmed.
-          </p>
-          <div style={{ fontSize: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Apex (AS9100 Rev D):</span>
-              <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-high-text)' }}>10 Days Left</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Rotary (IATF 16949):</span>
-              <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-med-text)' }}>20 Days Left</span>
-            </div>
-          </div>
-        </div>
+        const totalOverpayment = suppliers.reduce((acc, s) => acc + (s.quarterlyOverpaymentExposure || 0), 0);
 
-        {/* Pillar 4: Continuity & Stockout */}
-        <div className="card" style={{ borderTop: '3px solid #f87171' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '8px',
-              backgroundColor: 'rgba(239, 68, 68, 0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--risk-high-solid)'
-            }}>
-              <Package size={18} />
+        const expiringCertSuppliers = [...suppliers]
+          .filter(s => s.certificateExpiryDays != null && s.certificateExpiryDays <= 60)
+          .sort((a, b) => a.certificateExpiryDays - b.certificateExpiryDays);
+
+        const stockSorted = [...suppliers]
+          .filter(s => s.stockCoverageDays != null && (s.stockCoverageDays < 35 || (s.leadTimeCoverageGapDays != null && s.leadTimeCoverageGapDays < 0)))
+          .sort((a, b) => (a.leadTimeCoverageGapDays || a.stockCoverageDays || 0) - (b.leadTimeCoverageGapDays || b.stockCoverageDays || 0));
+
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '16px'
+          }}>
+            {/* Pillar 1: Quality Defects */}
+            <div className="card" style={{ borderTop: '3px solid var(--risk-high-solid)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--risk-high-bg)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--risk-high-solid)'
+                }}>
+                  <TrendingUp size={18} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Quality & Defect Surge
+                  </h4>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Incoming inspection rejection rate</span>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
+                {qualitySorted.length > 0 ? (
+                  <>
+                    <strong style={{ color: 'var(--risk-high-text)' }}>{qualitySorted[0].shortName} ({qualitySorted[0].rejectionRate}%)</strong>
+                    {qualitySorted.length > 1 ? (
+                      <> and <strong style={{ color: 'var(--risk-med-text)' }}>{qualitySorted[1].shortName} ({qualitySorted[1].rejectionRate}%)</strong></>
+                    ) : null} exhibit elevated defect rates exceeding standard thresholds.
+                  </>
+                ) : (
+                  'Zero quality defect spikes detected or defect rates not reported in dataset.'
+                )}
+              </p>
+              <div style={{ fontSize: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+                {qualitySorted.slice(0, 2).map(s => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{s.shortName}:</span>
+                    <span className="mono-num" style={{ fontWeight: 700, color: s.rejectionRate >= 4 ? 'var(--risk-high-text)' : 'var(--risk-med-text)' }}>
+                      {s.rejectionRate}% defect rate
+                    </span>
+                  </div>
+                ))}
+                {qualitySorted.length === 0 && (
+                  <div style={{ color: 'var(--text-muted)' }}>No defect rate anomalies recorded</div>
+                )}
+              </div>
             </div>
-            <div>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                Stock Depletion & Delays
-              </h4>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Factory stock coverage vs replenishment lead time</span>
+
+            {/* Pillar 2: Price Variance Leakage */}
+            <div className="card" style={{ borderTop: '3px solid #38bdf8' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#38bdf8'
+                }}>
+                  <DollarSign size={18} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Contract Price Variance
+                  </h4>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Unapproved invoice billing overages</span>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
+                {totalOverpayment > 0 ? (
+                  <>Audited financial exposure: <strong style={{ color: '#38bdf8' }}>${totalOverpayment.toLocaleString()}</strong> across contract price variance lines.</>
+                ) : (
+                  priceSorted.length > 0 ? (
+                    <>Observed price variance up to <strong style={{ color: '#38bdf8' }}>+{priceSorted[0].priceVariance}%</strong> above baseline rates.</>
+                  ) : (
+                    'Zero contract price deviations detected or pricing fields not provided.'
+                  )
+                )}
+              </p>
+              <div style={{ fontSize: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+                {priceSorted.slice(0, 2).map(s => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{s.shortName} (+{s.priceVariance}%):</span>
+                    <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-high-text)' }}>
+                      {s.quarterlyOverpaymentExposure > 0 ? `+$${s.quarterlyOverpaymentExposure.toLocaleString()}` : `+${s.priceVariance}%`}
+                    </span>
+                  </div>
+                ))}
+                {priceSorted.length === 0 && (
+                  <div style={{ color: 'var(--text-muted)' }}>All billing aligns with contract terms</div>
+                )}
+              </div>
+            </div>
+
+            {/* Pillar 3: Compliance & Expiry */}
+            <div className="card" style={{ borderTop: '3px solid var(--risk-med-solid)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--risk-med-bg)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--risk-med-solid)'
+                }}>
+                  <Clock size={18} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Compliance & Expiry Cliff
+                  </h4>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Mandatory quality accreditations</span>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
+                {expiringCertSuppliers.length > 0 ? (
+                  <>{expiringCertSuppliers.length} supplier{expiringCertSuppliers.length > 1 ? 's' : ''} inside the 60-day compliance expiry window requiring audit re-attestation.</>
+                ) : (
+                  'All monitored supplier accreditations valid or expiry dates unmeasured.'
+                )}
+              </p>
+              <div style={{ fontSize: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+                {expiringCertSuppliers.slice(0, 2).map(s => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{s.shortName}:</span>
+                    <span className="mono-num" style={{ fontWeight: 700, color: s.certificateExpiryDays <= 20 ? 'var(--risk-high-text)' : 'var(--risk-med-text)' }}>
+                      {s.certificateExpiryDays} Days Left
+                    </span>
+                  </div>
+                ))}
+                {expiringCertSuppliers.length === 0 && (
+                  <div style={{ color: 'var(--text-muted)' }}>No near-term certificate expirations</div>
+                )}
+              </div>
+            </div>
+
+            {/* Pillar 4: Continuity & Stockout */}
+            <div className="card" style={{ borderTop: '3px solid #f87171' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--risk-high-solid)'
+                }}>
+                  <Package size={18} />
+                </div>
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                    Stock Depletion & Delays
+                  </h4>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Factory stock coverage vs replenishment lead time</span>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
+                {stockSorted.length > 0 ? (
+                  <>
+                    <strong style={{ color: 'var(--risk-high-text)' }}>{stockSorted[0].shortName} ({stockSorted[0].stockCoverageDays}d coverage)</strong>
+                    {stockSorted.length > 1 ? (
+                      <> and <strong style={{ color: 'var(--risk-high-text)' }}>{stockSorted[1].shortName} ({stockSorted[1].stockCoverageDays}d coverage)</strong></>
+                    ) : null} operate with thin inventory buffers.
+                  </>
+                ) : (
+                  'All inventory buffers within optimal coverage targets or unmeasured.'
+                )}
+              </p>
+              <div style={{ fontSize: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
+                {stockSorted.slice(0, 2).map(s => (
+                  <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{s.shortName}:</span>
+                    <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-high-text)' }}>
+                      {s.leadTimeCoverageGapDays != null ? `${s.leadTimeCoverageGapDays}d Gap (${s.stockCoverageDays}d on-hand)` : `${s.stockCoverageDays}d on-hand`}
+                    </span>
+                  </div>
+                ))}
+                {stockSorted.length === 0 && (
+                  <div style={{ color: 'var(--text-muted)' }}>No stockout exposure detected</div>
+                )}
+              </div>
             </div>
           </div>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: 1.45 }}>
-            <strong style={{ color: 'var(--risk-high-text)' }}>HydroTech (14d coverage)</strong> and <strong style={{ color: 'var(--risk-high-text)' }}>Apex (25d coverage)</strong> are operating under severe negative lead-time gaps.
-          </p>
-          <div style={{ fontSize: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>HydroTech Seals:</span>
-              <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-high-text)' }}>-56d Gap (14d on-hand)</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: 'var(--text-secondary)' }}>Apex Castings:</span>
-              <span className="mono-num" style={{ fontWeight: 700, color: 'var(--risk-high-text)' }}>-87d Gap (25d on-hand)</span>
-            </div>
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* Cross-Signal Intelligence Section */}
       <div className="card" style={{ padding: '24px' }}>
